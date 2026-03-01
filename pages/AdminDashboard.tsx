@@ -713,25 +713,65 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
 
       {/* PRODUCT MODAL */}
       {isProductModalOpen && (
-        <div style={{position:'fixed',inset:0,zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',backgroundColor:'rgba(0,0,0,0.25)',backdropFilter:'blur(4px)'}} onClick={() => setIsProductModalOpen(false)}>
-          <div style={{position:'relative',background:'white',borderRadius:'40px',boxShadow:'0 25px 60px rgba(0,0,0,0.2)',width:'100%',maxWidth:'672px',maxHeight:'90vh',display:'flex',flexDirection:'column',overflow:'hidden'}} onClick={(e) => e.stopPropagation()}>
-            {/* Nút X tròn nổi góc trên phải */}
-            <button 
+        <div
+          onClick={() => setIsProductModalOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '24px',
+            backgroundColor: 'rgba(0,0,0,0.3)',
+            backdropFilter: 'blur(4px)'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'relative',
+              background: 'white',
+              borderRadius: '40px',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.25)',
+              width: '100%',
+              maxWidth: '672px',
+              maxHeight: 'calc(100vh - 48px)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            {/* Nút X tròn cố định góc trên phải của modal */}
+            <button
               type="button"
               onClick={() => setIsProductModalOpen(false)}
-              style={{position:'absolute',top:'-14px',right:'-14px',zIndex:10,width:'44px',height:'44px',borderRadius:'50%',background:'white',border:'2px solid #fce7f3',boxShadow:'0 4px 16px rgba(0,0,0,0.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'18px',fontWeight:'bold',color:'#6b7280',cursor:'pointer'}}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color='#ec4899'; (e.currentTarget as HTMLButtonElement).style.background='#fdf2f8'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color='#6b7280'; (e.currentTarget as HTMLButtonElement).style.background='white'; }}
+              style={{
+                position: 'absolute', top: '16px', right: '16px', zIndex: 20,
+                width: '40px', height: '40px', borderRadius: '50%',
+                background: 'rgba(255,255,255,0.25)',
+                border: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '20px', fontWeight: 'bold', color: 'white',
+                cursor: 'pointer', lineHeight: 1
+              }}
             >
               ✕
             </button>
-            <div className="bg-primary p-6 text-white flex justify-between items-center rounded-t-[40px]" style={{flexShrink:0}}>
+            {/* Header cố định */}
+            <div
+              className="bg-primary text-white"
+              style={{
+                padding: '24px 32px',
+                borderRadius: '40px 40px 0 0',
+                flexShrink: 0
+              }}
+            >
               <h3 className="text-2xl font-cute font-bold">
                 {editingProduct?.id ? '✏️ Sửa sản phẩm' : '➕ Thêm sản phẩm mới'}
               </h3>
             </div>
-            
-            <form onSubmit={handleSaveProduct} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 custom-scrollbar" style={{overflowY:'auto',overflowX:'visible',flex:1}}>
+            {/* Nội dung form scroll độc lập */}
+            <form
+              onSubmit={handleSaveProduct}
+              className="grid grid-cols-1 md:grid-cols-2 gap-6 custom-scrollbar"
+              style={{ padding: '32px', overflowY: 'auto', flex: 1 }}
+            >
               <div className="md:col-span-2" style={{position: 'relative', zIndex: 50}}>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Danh mục</label>
                 <select 
