@@ -17,16 +17,31 @@ const Home: React.FC<Props> = ({ user }) => {
 
   const fetchProducts = async () => {
     try {
+      // FIX: Dùng orderBy đơn để tránh lỗi "requires a composite index" trên Firestore
+      // Firestore yêu cầu tạo index thủ công khi dùng 2 orderBy cùng lúc
+      // => Sắp xếp is_hot ở client-side thay vì Firestore
       const q = query(
         collection(db, 'products'),
-        orderBy('is_hot', 'desc'),
         orderBy('sort_order', 'asc')
       );
       const querySnapshot = await getDocs(q);
       const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-      setProducts(data || []);
-    } catch (err) {
+      // Sắp xếp: is_hot lên đầu, sau đó theo sort_order
+      const sorted = data.sort((a: any, b: any) => {
+        if (b.is_hot === a.is_hot) return (a.sort_order || 0) - (b.sort_order || 0);
+        return b.is_hot ? 1 : -1;
+      });
+      setProducts(sorted || []);
+    } catch (err: any) {
       console.error('Error fetching products:', err);
+      // Fallback: nếu field sort_order chưa tồn tại thì lấy tất cả không cần orderBy
+      try {
+        const fallbackSnap = await getDocs(collection(db, 'products'));
+        const fallbackData = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+        setProducts(fallbackData || []);
+      } catch (fallbackErr) {
+        console.error('Fallback fetch also failed:', fallbackErr);
+      }
     } finally {
       setLoading(false);
     }
