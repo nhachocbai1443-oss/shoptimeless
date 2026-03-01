@@ -157,6 +157,16 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
 
   const generateVietQR = () => {
     if (!selectedMethod) return { url: '', content: '' };
+
+    // Nếu admin đã upload ảnh QR tùy chỉnh (VD: QR MoMo, ZaloPay chụp từ app), dùng luôn
+    if (selectedMethod.custom_qr_url) {
+      return {
+        url: selectedMethod.custom_qr_url,
+        content: ''
+      };
+    }
+
+    // Nếu không có ảnh QR tùy chỉnh, tạo tự động qua VietQR như cũ
     const amount = totalPrice;
     const addInfo = `KTK${Math.floor(10000 + Math.random() * 90000)}`;
     const accountNo = selectedMethod.account_no;
@@ -431,11 +441,7 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
                         </div>
                       </div>
 
-                      <div className="p-5 bg-blue-50 rounded-2xl border border-blue-100 text-center">
-                        <p className="text-xs text-blue-700 font-bold leading-relaxed">
-                          💬 Nội dung chuyển khoản: Vui lòng điền <span className="underline">tên Zalo hoặc số Zalo</span> của bạn để chúng tôi xác nhận đơn hàng nhanh nhất.
-                        </p>
-                      </div>
+
                     </div>
                   </div>
                 </div>
