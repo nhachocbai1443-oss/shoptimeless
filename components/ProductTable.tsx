@@ -148,7 +148,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                       })()}đ
                     </span>
                     {isCtvtime && (
-                      <span className="text-[9px] text-amber-500 font-black uppercase tracking-tighter">⭐ Giá ctvtime</span>
+                      <span className="text-[9px] text-amber-500 font-black uppercase tracking-tighter">Ưu đãi CTV</span>
                     )}
                     {isCTV && !isCtvtime && (
                       <span className="text-[9px] text-green-500 font-black uppercase tracking-tighter">Ưu đãi CTV</span>
