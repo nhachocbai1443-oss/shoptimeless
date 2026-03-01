@@ -22,10 +22,28 @@ const ProductTable: React.FC<ProductTableProps> = ({
   const navigate = useNavigate();
   const isAdmin = user?.role === 'admin';
   const isCTV = user?.role === 'ctv';
+  // Kiểm tra có phải CTV đặc biệt ctvtime không
+  const isCtvtime = isCTV && user?.username === 'ctvtime';
   const [selectedVariantIndices, setSelectedVariantIndices] = useState<Record<string, number>>({});
 
   const handleBuyNow = (product: Product) => {
     navigate(`/checkout/${product.id}`);
+  };
+
+  // Hàm lấy giá phù hợp theo loại user
+  const getPrice = (
+    price_public: number,
+    price_ctv: number,
+    price_ctvtime?: number
+  ): number => {
+    if (isCtvtime) {
+      // CTV ctvtime: dùng giá riêng nếu có, không thì dùng giá CTV chung
+      return (price_ctvtime && price_ctvtime > 0) ? price_ctvtime : price_ctv;
+    }
+    if (isCTV) {
+      return price_ctv;
+    }
+    return price_public;
   };
 
   return (
@@ -119,13 +137,20 @@ const ProductTable: React.FC<ProductTableProps> = ({
                     <span className="text-xl font-cute font-bold text-gray-900">
                       {(() => {
                         const variantIdx = selectedVariantIndices[product.id] ?? -1;
-                        const price = variantIdx === -1 
-                          ? (isCTV ? product.price_ctv : product.price_public)
-                          : (isCTV ? product.variants![variantIdx].price_ctv : product.variants![variantIdx].price_public);
+                        let price: number;
+                        if (variantIdx === -1) {
+                          price = getPrice(product.price_public, product.price_ctv, product.price_ctvtime);
+                        } else {
+                          const v = product.variants![variantIdx];
+                          price = getPrice(v.price_public, v.price_ctv, v.price_ctvtime);
+                        }
                         return price.toLocaleString('vi-VN');
                       })()}đ
                     </span>
-                    {isCTV && (
+                    {isCtvtime && (
+                      <span className="text-[9px] text-amber-500 font-black uppercase tracking-tighter">⭐ Giá ctvtime</span>
+                    )}
+                    {isCTV && !isCtvtime && (
                       <span className="text-[9px] text-green-500 font-black uppercase tracking-tighter">Ưu đãi CTV</span>
                     )}
                   </div>
