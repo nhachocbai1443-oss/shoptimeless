@@ -728,11 +728,11 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
             style={{
               position: 'relative',
               background: 'white',
-              borderRadius: '40px',
+              borderRadius: '32px',
               boxShadow: '0 25px 60px rgba(0,0,0,0.25)',
               width: '100%',
-              maxWidth: '672px',
-              maxHeight: 'calc(100vh - 48px)',
+              maxWidth: '560px',
+              maxHeight: 'calc(100vh - 80px)',
               display: 'flex',
               flexDirection: 'column'
             }}
