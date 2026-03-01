@@ -19,6 +19,7 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
   const [quantity, setQuantity] = useState(1);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -141,8 +142,7 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
         accountInfo: accountInfo
       }).catch(err => console.error('Notification error (non-blocking):', err));
 
-      alert('Cảm ơn bạn! Đơn hàng đã được lưu. Chúng tôi sẽ kiểm tra thanh toán và liên hệ với bạn sớm nhất.');
-      navigate('/');
+      setShowSuccessPopup(true);
     } catch (err: any) {
       console.error('Error saving order:', err);
       if (err.code === 'permission-denied') {
@@ -172,6 +172,33 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
 
   return (
     <div className="min-h-screen bg-gray-50/50 py-10 px-4 animate-fade-in">
+      {/* SUCCESS POPUP */}
+      {showSuccessPopup && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+          <div className="relative bg-white rounded-[40px] shadow-2xl w-full max-w-md p-10 flex flex-col items-center gap-6 animate-fade-in">
+            <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-5xl">
+              🎉
+            </div>
+            <h3 className="text-2xl font-cute font-bold text-gray-800 text-center">Đặt hàng thành công!</h3>
+            <div className="bg-blue-50 rounded-3xl p-6 border border-blue-100 w-full text-center space-y-3">
+              <p className="text-blue-700 font-bold text-base">📦 Tài khoản sẽ được giao trong vòng 24h</p>
+              <p className="text-blue-600 text-sm leading-relaxed">
+                Chúng tôi sẽ liên hệ và giao tài khoản qua số <span className="font-bold">Zalo</span> mà bạn đã cung cấp.
+              </p>
+              <p className="text-gray-500 text-xs">
+                Nếu sau 24h chưa nhận được, vui lòng liên hệ lại với chúng tôi.
+              </p>
+            </div>
+            <button
+              onClick={() => { setShowSuccessPopup(false); navigate('/'); }}
+              className="w-full bg-primary hover:bg-pink-600 text-white py-4 rounded-3xl font-bold shadow-xl shadow-primary/20 transition-all transform hover:-translate-y-1 active:scale-95 text-lg"
+            >
+              Về trang chủ
+            </button>
+          </div>
+        </div>
+      )}
       <div className="max-w-6xl mx-auto">
         {/* Header with Back Button */}
         <div className="flex items-center justify-between mb-8">
@@ -409,7 +436,7 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
 
                       <div className="p-5 bg-red-50 rounded-2xl border border-red-100 text-center">
                         <p className="text-xs text-red-600 font-bold leading-relaxed">
-                          ⚠️ Vui lòng nhập <span className="underline">chính xác nội dung</span> chuyển khoản để hệ thống tự động xác nhận đơn hàng nhanh nhất.
+                          ⚠️ Nội dung chuyển khoản: Vui lòng điền <span className="underline">Tên Zalo hoặc số Zalo</span> của bạn để chúng tôi xác nhận đơn hàng nhanh nhất.
                         </p>
                       </div>
                     </div>
