@@ -83,10 +83,18 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
   const fetchCtvs = async () => {
     setLoadingCtvs(true);
     try {
-      const q = query(collection(db, 'users'), where('role', '==', 'ctv'), orderBy('created_at', 'desc'));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-      setCtvs(data || []);
+      // FIX: Tránh dùng where + orderBy cùng lúc vì Firestore yêu cầu composite index
+      // => Lấy tất cả users rồi lọc + sắp xếp ở client-side
+      const querySnapshot = await getDocs(collection(db, 'users'));
+      const allUsers = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      const ctvList = allUsers
+        .filter((u: any) => u.role === 'ctv')
+        .sort((a: any, b: any) => {
+          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return dateB - dateA;
+        });
+      setCtvs(ctvList || []);
     } catch (err) {
       console.error('Error fetching CTVs:', err);
     } finally {
@@ -149,60 +157,6 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
   }, [activeTab]);
 
   // --- PRODUCT ACTIONS ---
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingProduct?.name) {
-      alert('Vui lòng nhập tên sản phẩm!');
-      return;
-    }
-    try {
-      const { id, ...productData } = editingProduct as any;
-      
-      // FIX: Đảm bảo variants là array hợp lệ (Firestore không chấp nhận undefined)
-      if (!productData.variants || !Array.isArray(productData.variants)) {
-        productData.variants = [];
-      }
-      // Lọc bỏ variants rỗng
-      productData.variants = productData.variants.filter((v: any) => v.form && v.form.trim() !== '');
-
-      // FIX: Đảm bảo các trường số không bị undefined (Firestore từ chối undefined)
-      productData.price_public = Number(productData.price_public) || 0;
-      productData.price_ctv = Number(productData.price_ctv) || 0;
-      productData.discount_percent = Number(productData.discount_percent) || 0;
-      productData.sort_order = Number(productData.sort_order) || 0;
-      productData.is_hot = Boolean(productData.is_hot);
-      productData.notes = productData.notes || '';
-      productData.image_url = productData.image_url || '';
-      productData.form = productData.form || '';
-      productData.package = productData.package || '';
-      productData.category = productData.category || CATEGORIES[0];
-
-      if (id) {
-        await updateDoc(doc(db, 'products', id), productData);
-        alert('Đã cập nhật sản phẩm thành công!');
-      } else {
-        await addDoc(collection(db, 'products'), {
-          ...productData,
-          created_at: new Date().toISOString()
-        });
-        alert('Đã thêm sản phẩm mới thành công!');
-      }
-      setIsProductModalOpen(false);
-      setEditingProduct(null);
-      fetchProducts();
-    } catch (err: any) {
-      console.error('Save error:', err);
-      // Hiển thị lỗi chi tiết để dễ debug
-      if (err.code === 'permission-denied') {
-        alert('Lỗi: Không có quyền ghi dữ liệu!\n\nHãy vào Firebase Console > Firestore Database > Rules và đặt tạm thời:\nallow read, write: if true;\n\nSau đó thêm bảo mật sau khi test xong.');
-      } else if (err.code === 'unavailable') {
-        alert('Lỗi: Không thể kết nối Firebase! Kiểm tra kết nối mạng.');
-      } else {
-        alert(`Lỗi khi lưu sản phẩm: ${err.message || JSON.stringify(err)}`);
-      }
-    }
-  };
-
   const handleDeleteProduct = async (id: string) => {
     if (!window.confirm('Bạn có chắc muốn xóa sản phẩm này?')) return;
     try {
@@ -287,7 +241,7 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
     setUploadingQR(index);
     try {
       const file = e.target.files[0];
-      const publicUrl = await uploadImageToSupabase(file, 'icons');
+      const publicUrl = await uploadImageToSupabase(file, 'qr');
       updatePaymentMethod(index, 'custom_qr_url', publicUrl);
     } catch (err: any) {
       console.error('Error uploading custom QR to Supabase:', err);
@@ -495,6 +449,7 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
                   type="text"
                   value={newCtvName}
                   onChange={(e) => setNewCtvName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddCtv()}
                   placeholder="Nhập username CTV..."
                   className="w-full px-6 py-3 rounded-2xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
                 />
@@ -507,25 +462,51 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
               </button>
             </div>
 
+            {/* Ghi chú về giá riêng cho ctvtime */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-start gap-3">
+              <span className="text-amber-500 text-lg mt-0.5">💡</span>
+              <div>
+                <p className="text-sm font-bold text-amber-700">Giá đặc biệt cho CTV <span className="font-black text-amber-800">ctvtime</span></p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  CTV có username <strong>ctvtime</strong> sẽ thấy <strong>giá riêng (price_ctvtime)</strong> khi được thiết lập trong từng sản phẩm. Các CTV còn lại thấy giá CTV chung (price_ctv).
+                  Để thiết lập giá riêng, vào <strong>Sản phẩm → Sửa sản phẩm</strong>.
+                </p>
+              </div>
+            </div>
+
             <div className="bg-white/50 backdrop-blur-sm rounded-3xl border border-pink-100 shadow-xl overflow-hidden">
               <table className="w-full text-left">
                 <thead className="bg-primary text-white font-cute text-lg">
                   <tr>
                     <th className="px-6 py-4">Username</th>
+                    <th className="px-6 py-4">Loại giá</th>
                     <th className="px-6 py-4">Ngày tham gia</th>
                     <th className="px-6 py-4 text-center">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="font-body">
                   {loadingCtvs ? (
-                    <tr><td colSpan={3} className="px-6 py-10 text-center text-gray-400">Đang tải...</td></tr>
+                    <tr><td colSpan={4} className="px-6 py-10 text-center text-gray-400">Đang tải...</td></tr>
                   ) : ctvs.length === 0 ? (
-                    <tr><td colSpan={3} className="px-6 py-10 text-center text-gray-400 italic">Chưa có CTV nào...</td></tr>
+                    <tr><td colSpan={4} className="px-6 py-10 text-center text-gray-400 italic">Chưa có CTV nào...</td></tr>
                   ) : (
                     ctvs.map(ctv => (
                       <tr key={ctv.id} className="border-b border-pink-50 hover:bg-pink-50/50 transition-colors">
                         <td className="px-6 py-4 font-bold text-gray-700">{ctv.username}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500">{new Date(ctv.created_at).toLocaleDateString('vi-VN')}</td>
+                        <td className="px-6 py-4">
+                          {ctv.username === 'ctvtime' ? (
+                            <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full text-xs font-bold">
+                              ⭐ Giá riêng (ctvtime)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-full text-xs font-bold">
+                              👥 Giá CTV chung
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {ctv.created_at ? new Date(ctv.created_at).toLocaleDateString('vi-VN') : '—'}
+                        </td>
                         <td className="px-6 py-4 text-center">
                           <button 
                             onClick={() => handleRemoveCtv(ctv.id)}
