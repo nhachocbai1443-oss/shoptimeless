@@ -426,17 +426,14 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
                           </div>
                           <div className="flex justify-between items-center py-3 border-b border-gray-200/50">
                             <span className="text-sm text-gray-500 font-bold">Nội dung:</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-black text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">{qrData.content}</span>
-                              <button type="button" className="text-xs bg-gray-100 p-2 rounded-xl hover:bg-gray-200 transition-all" onClick={() => navigator.clipboard.writeText(qrData.content)}>📋</button>
-                            </div>
+                            <span className="text-sm font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">Điền tên / số Zalo của bạn</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="p-5 bg-red-50 rounded-2xl border border-red-100 text-center">
-                        <p className="text-xs text-red-600 font-bold leading-relaxed">
-                          ⚠️ Nội dung chuyển khoản: Vui lòng điền <span className="underline">Tên Zalo hoặc số Zalo</span> của bạn để chúng tôi xác nhận đơn hàng nhanh nhất.
+                      <div className="p-5 bg-blue-50 rounded-2xl border border-blue-100 text-center">
+                        <p className="text-xs text-blue-700 font-bold leading-relaxed">
+                          💬 Nội dung chuyển khoản: Vui lòng điền <span className="underline">tên Zalo hoặc số Zalo</span> của bạn để chúng tôi xác nhận đơn hàng nhanh nhất.
                         </p>
                       </div>
                     </div>
