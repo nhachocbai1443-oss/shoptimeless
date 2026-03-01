@@ -11,6 +11,7 @@ export interface ProductVariant {
   form: string;
   price_public: number;
   price_ctv: number;
+  price_ctvtime?: number; // Giá riêng cho CTV ctvtime (nếu không có thì dùng price_ctv)
 }
 
 export interface Product {
@@ -20,7 +21,8 @@ export interface Product {
   form: string; // Hình thức mặc định
   package: string; // Gói
   price_public: number; // Giá mặc định
-  price_ctv: number; // Giá mặc định
+  price_ctv: number; // Giá CTV chung
+  price_ctvtime?: number; // Giá riêng cho CTV ctvtime (nếu không có thì dùng price_ctv)
   variants?: ProductVariant[]; // Các lựa chọn hình thức khác
   discount_percent?: number; // Phần trăm giảm giá
   is_hot?: boolean; // Sản phẩm hot
