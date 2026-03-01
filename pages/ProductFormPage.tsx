@@ -33,6 +33,7 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
     package: '',
     price_public: 0,
     price_ctv: 0,
+    price_ctvtime: undefined,
     discount_percent: 0,
     sort_order: 0,
     is_hot: false,
@@ -75,7 +76,7 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
   const addVariant = () => {
     setForm(prev => ({
       ...prev,
-      variants: [...(prev.variants || []), { form: '', price_public: 0, price_ctv: 0 }]
+      variants: [...(prev.variants || []), { form: '', price_public: 0, price_ctv: 0, price_ctvtime: undefined }]
     }));
   };
 
@@ -99,8 +100,27 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
       const { id, ...productData } = form as any;
       if (!productData.variants || !Array.isArray(productData.variants)) productData.variants = [];
       productData.variants = productData.variants.filter((v: any) => v.form && v.form.trim() !== '');
+      // Xử lý price_ctvtime cho từng variant
+      productData.variants = productData.variants.map((v: any) => {
+        const cleaned: any = {
+          form: v.form,
+          price_public: Number(v.price_public) || 0,
+          price_ctv: Number(v.price_ctv) || 0,
+        };
+        // Chỉ lưu price_ctvtime nếu có giá trị hợp lệ
+        if (v.price_ctvtime !== undefined && v.price_ctvtime !== null && v.price_ctvtime !== '' && Number(v.price_ctvtime) > 0) {
+          cleaned.price_ctvtime = Number(v.price_ctvtime);
+        }
+        return cleaned;
+      });
       productData.price_public = Number(productData.price_public) || 0;
       productData.price_ctv = Number(productData.price_ctv) || 0;
+      // Chỉ lưu price_ctvtime nếu có giá trị hợp lệ
+      if (productData.price_ctvtime !== undefined && productData.price_ctvtime !== null && productData.price_ctvtime !== '' && Number(productData.price_ctvtime) > 0) {
+        productData.price_ctvtime = Number(productData.price_ctvtime);
+      } else {
+        delete productData.price_ctvtime;
+      }
       productData.discount_percent = Number(productData.discount_percent) || 0;
       productData.sort_order = Number(productData.sort_order) || 0;
       productData.is_hot = Boolean(productData.is_hot);
@@ -238,7 +258,7 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
             </div>
           </div>
 
-          {/* Giá Public + Giá CTV */}
+          {/* Giá Public + Giá CTV chung */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Giá Public (đ)</label>
@@ -252,7 +272,7 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
               />
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Giá CTV (đ)</label>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Giá CTV chung (đ)</label>
               <input
                 required
                 type="number"
@@ -262,6 +282,31 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
                 className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
               />
             </div>
+          </div>
+
+          {/* Giá riêng cho CTV ctvtime */}
+          <div className="bg-amber-50 border-2 border-amber-100 rounded-2xl p-4 space-y-2">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-amber-500">⭐</span>
+              <label className="block text-sm font-bold text-amber-700">
+                Giá riêng cho CTV <span className="font-black">ctvtime</span> (đ) — Tùy chọn
+              </label>
+            </div>
+            <p className="text-xs text-amber-600 mb-2">
+              Nếu để trống hoặc nhập 0, CTV ctvtime sẽ thấy giá CTV chung ở trên.
+            </p>
+            <input
+              type="number"
+              min="0"
+              value={form.price_ctvtime ?? ''}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => setForm(prev => ({ 
+                ...prev, 
+                price_ctvtime: e.target.value === '' ? undefined : Number(e.target.value) 
+              }))}
+              placeholder="Nhập giá riêng cho ctvtime (để trống = dùng giá CTV chung)"
+              className="w-full px-4 py-3 rounded-xl border-2 border-amber-200 focus:border-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-100 transition-all bg-white"
+            />
           </div>
 
           {/* Giảm giá + Thứ tự */}
@@ -338,7 +383,8 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
                   >
                     ✕
                   </button>
-                  <div className="grid grid-cols-3 gap-4">
+                  {/* Hàng 1: Hình thức + Giá Public + Giá CTV chung */}
+                  <div className="grid grid-cols-3 gap-4 mb-3">
                     <div>
                       <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Hình thức</label>
                       <input
@@ -360,7 +406,7 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Giá CTV</label>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Giá CTV chung</label>
                       <input
                         type="number"
                         value={variant.price_ctv ?? ''}
@@ -369,6 +415,21 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
                         className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-primary focus:outline-none text-sm"
                       />
                     </div>
+                  </div>
+                  {/* Hàng 2: Giá riêng ctvtime */}
+                  <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+                    <label className="block text-[10px] font-bold text-amber-600 uppercase mb-1">
+                      ⭐ Giá riêng ctvtime (để trống = dùng giá CTV chung)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={variant.price_ctvtime ?? ''}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => updateVariant(index, 'price_ctvtime', e.target.value === '' ? undefined : Number(e.target.value))}
+                      placeholder="Để trống nếu không có giá riêng"
+                      className="w-full px-3 py-2 rounded-lg border border-amber-200 focus:border-amber-400 focus:outline-none text-sm bg-white"
+                    />
                   </div>
                 </div>
               ))}
