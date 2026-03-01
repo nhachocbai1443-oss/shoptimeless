@@ -42,6 +42,7 @@ export interface PaymentMethod {
   account_name: string;
   account_no: string;
   bank_name: string; // e.g., 'ACB', 'MoMo', 'ZaloPay'
+  custom_qr_url?: string; // Ảnh QR tùy chỉnh (dùng cho MoMo, ZaloPay thay vì VietQR tự động)
 }
 
 export interface AppSettings {
