@@ -713,27 +713,29 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
 
       {/* PRODUCT MODAL */}
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] overflow-y-auto">
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setIsProductModalOpen(false)}></div>
-          <div className="relative bg-white rounded-[40px] shadow-2xl w-full max-w-2xl animate-fade-in my-auto">
-            <div className="bg-primary p-6 text-white flex justify-between items-center">
+          <div className="flex min-h-full items-center justify-center p-4">
+          <div className="relative bg-white rounded-[40px] shadow-2xl w-full max-w-2xl animate-fade-in">
+            {/* Nút X tròn nổi bên ngoài góc trên phải */}
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsProductModalOpen(false);
+              }} 
+              className="absolute -top-4 -right-4 z-10 w-12 h-12 flex items-center justify-center bg-white text-gray-600 hover:text-primary hover:bg-pink-50 rounded-full shadow-xl text-xl font-bold transition-all transform hover:scale-110 active:scale-95 cursor-pointer border-2 border-pink-100"
+            >
+              ✕
+            </button>
+            <div className="bg-primary p-6 text-white flex justify-between items-center rounded-t-[40px]">
               <h3 className="text-2xl font-cute font-bold">
                 {editingProduct?.id ? '✏️ Sửa sản phẩm' : '➕ Thêm sản phẩm mới'}
               </h3>
-              <button 
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsProductModalOpen(false);
-                }} 
-                className="w-10 h-10 flex items-center justify-center bg-white/20 hover:bg-white/40 text-white rounded-full text-2xl transition-all transform hover:scale-110 active:scale-95 cursor-pointer font-bold"
-              >
-                ✕
-              </button>
             </div>
             
-            <form onSubmit={handleSaveProduct} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[calc(100vh-280px)] overflow-y-auto overflow-x-visible custom-scrollbar">
+            <form onSubmit={handleSaveProduct} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto overflow-x-visible custom-scrollbar">
               <div className="md:col-span-2" style={{position: 'relative', zIndex: 50}}>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Danh mục</label>
                 <select 
@@ -964,6 +966,7 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
                 </button>
               </div>
             </form>
+          </div>
           </div>
         </div>
       )}
