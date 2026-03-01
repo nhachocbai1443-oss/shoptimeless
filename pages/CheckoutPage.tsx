@@ -436,7 +436,14 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
                           </div>
                           <div className="flex justify-between items-center py-3 border-b border-gray-200/50">
                             <span className="text-sm text-gray-500 font-bold">Nội dung:</span>
-                            <span className="text-sm font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">Điền tên / số Zalo của bạn</span>
+                            {qrData.content ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-black text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-100 tracking-widest">{qrData.content}</span>
+                                <button type="button" className="text-xs bg-gray-100 p-2 rounded-xl hover:bg-gray-200 transition-all" onClick={() => navigator.clipboard.writeText(qrData.content)}>📋</button>
+                              </div>
+                            ) : (
+                              <span className="text-sm font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">Điền tên / số Zalo của bạn</span>
+                            )}
                           </div>
                         </div>
                       </div>
