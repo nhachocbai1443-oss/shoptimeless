@@ -35,6 +35,7 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [savingSettings, setSavingSettings] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState<number | null>(null);
+  const [uploadingQR, setUploadingQR] = useState<number | null>(null);
 
   // Orders State
   const [orders, setOrders] = useState<Order[]>([]);
@@ -278,6 +279,21 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
       alert(err.message || 'Lỗi khi tải icon lên Supabase Storage!');
     } finally {
       setUploadingIcon(null);
+    }
+  };
+
+  const handleUploadCustomQR = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    setUploadingQR(index);
+    try {
+      const file = e.target.files[0];
+      const publicUrl = await uploadImageToSupabase(file, 'icons');
+      updatePaymentMethod(index, 'custom_qr_url', publicUrl);
+    } catch (err: any) {
+      console.error('Error uploading custom QR to Supabase:', err);
+      alert(err.message || 'Lỗi khi tải ảnh QR lên Supabase Storage!');
+    } finally {
+      setUploadingQR(null);
     }
   };
 
@@ -653,6 +669,51 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
                         />
                       </div>
                     </div>
+
+                    {/* Custom QR Upload */}
+                    <div className="pt-5 border-t border-pink-50">
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-3 ml-1">
+                        Ảnh QR Tùy Chỉnh — dùng cho MoMo, ZaloPay (nếu để trống sẽ tự tạo QR qua VietQR)
+                      </label>
+                      <div className="flex items-center gap-5">
+                        <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-pink-200 bg-pink-50/30 flex items-center justify-center overflow-hidden shrink-0">
+                          {method.custom_qr_url ? (
+                            <img src={method.custom_qr_url} alt="Custom QR" className="w-full h-full object-contain" />
+                          ) : (
+                            <span className="text-[10px] text-gray-400 font-bold text-center px-1">Chưa có QR</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="relative cursor-pointer inline-flex items-center gap-2 bg-pink-50 hover:bg-pink-100 text-primary text-xs font-bold px-4 py-2.5 rounded-xl transition-all border border-pink-200">
+                            {uploadingQR === idx ? (
+                              <><div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></div> Đang tải...</>
+                            ) : (
+                              <>📷 Upload ảnh QR từ app</>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleUploadCustomQR(e, idx)}
+                              className="absolute inset-0 opacity-0 cursor-pointer"
+                              disabled={uploadingQR === idx}
+                            />
+                          </label>
+                          {method.custom_qr_url && (
+                            <button
+                              type="button"
+                              onClick={() => updatePaymentMethod(idx, 'custom_qr_url', '')}
+                              className="text-xs text-red-400 hover:text-red-600 font-bold px-4 py-2 rounded-xl border border-red-100 hover:bg-red-50 transition-all"
+                            >
+                              🗑 Xóa QR tùy chỉnh
+                            </button>
+                          )}
+                          <p className="text-[10px] text-gray-400 leading-relaxed max-w-[200px]">
+                            Chụp màn hình QR nhận tiền từ app MoMo / ZaloPay rồi upload lên đây.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
                   </div>
                 ))}
               </div>
