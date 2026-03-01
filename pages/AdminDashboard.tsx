@@ -713,9 +713,9 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
 
       {/* PRODUCT MODAL */}
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setIsProductModalOpen(false)}></div>
-          <div className="relative bg-white rounded-[40px] shadow-2xl w-full max-w-2xl animate-fade-in">
+          <div className="relative bg-white rounded-[40px] shadow-2xl w-full max-w-2xl animate-fade-in my-auto">
             <div className="bg-primary p-6 text-white flex justify-between items-center">
               <h3 className="text-2xl font-cute font-bold">
                 {editingProduct?.id ? '✏️ Sửa sản phẩm' : '➕ Thêm sản phẩm mới'}
@@ -727,21 +727,21 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
                   e.stopPropagation();
                   setIsProductModalOpen(false);
                 }} 
-                className="text-2xl hover:scale-110 transition-transform p-2 -mr-2 cursor-pointer"
+                className="w-10 h-10 flex items-center justify-center bg-white/20 hover:bg-white/40 text-white rounded-full text-2xl transition-all transform hover:scale-110 active:scale-95 cursor-pointer font-bold"
               >
                 ✕
               </button>
             </div>
             
-            <form onSubmit={handleSaveProduct} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto overflow-x-visible custom-scrollbar">
-              <div className="md:col-span-2" style={{position: 'relative', zIndex: 9999}}>
+            <form onSubmit={handleSaveProduct} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[calc(100vh-280px)] overflow-y-auto overflow-x-visible custom-scrollbar">
+              <div className="md:col-span-2" style={{position: 'relative', zIndex: 50}}>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Danh mục</label>
                 <select 
                   required
                   value={editingProduct?.category || ''}
                   onChange={(e) => setEditingProduct({...editingProduct, category: e.target.value})}
-                  className="w-full px-4 py-2.5 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none bg-white"
-                  style={{position: 'relative', zIndex: 9999}}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none bg-white focus:ring-4 focus:ring-pink-100 transition-all"
+                  style={{position: 'relative', zIndex: 50}}
                 >
                   <option value="">-- Chọn danh mục --</option>
                   {CATEGORIES.map(cat => (
