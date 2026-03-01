@@ -147,10 +147,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                         return price.toLocaleString('vi-VN');
                       })()}đ
                     </span>
-                    {isCtvtime && (
-                      <span className="text-[9px] text-amber-500 font-black uppercase tracking-tighter">Ưu đãi CTV</span>
-                    )}
-                    {isCTV && !isCtvtime && (
+                    {isCTV && (
                       <span className="text-[9px] text-green-500 font-black uppercase tracking-tighter">Ưu đãi CTV</span>
                     )}
                   </div>
