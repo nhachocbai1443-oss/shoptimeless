@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import CheckoutPage from './pages/CheckoutPage';
+import ProductFormPage from './pages/ProductFormPage';
 import { User } from './types';
 
 function App() {
@@ -44,6 +45,15 @@ function App() {
             element={
               user && user.role === 'admin'
                 ? <AdminDashboard user={user} /> 
+                : <Navigate to="/" />
+            } 
+          />
+
+          <Route 
+            path="/admin/product/:productId" 
+            element={
+              user && user.role === 'admin'
+                ? <ProductFormPage user={user} /> 
                 : <Navigate to="/" />
             } 
           />
