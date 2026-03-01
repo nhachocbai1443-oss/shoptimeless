@@ -715,7 +715,7 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
       {isProductModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setIsProductModalOpen(false)}></div>
-          <div className="relative bg-white rounded-[40px] shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in">
+          <div className="relative bg-white rounded-[40px] shadow-2xl w-full max-w-2xl animate-fade-in">
             <div className="bg-primary p-6 text-white flex justify-between items-center">
               <h3 className="text-2xl font-cute font-bold">
                 {editingProduct?.id ? '✏️ Sửa sản phẩm' : '➕ Thêm sản phẩm mới'}
@@ -733,14 +733,15 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
               </button>
             </div>
             
-            <form onSubmit={handleSaveProduct} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-              <div className="md:col-span-2">
+            <form onSubmit={handleSaveProduct} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto overflow-x-visible custom-scrollbar">
+              <div className="md:col-span-2" style={{position: 'relative', zIndex: 9999}}>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Danh mục</label>
                 <select 
                   required
                   value={editingProduct?.category || ''}
                   onChange={(e) => setEditingProduct({...editingProduct, category: e.target.value})}
-                  className="w-full px-4 py-2.5 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none"
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none bg-white"
+                  style={{position: 'relative', zIndex: 9999}}
                 >
                   <option value="">-- Chọn danh mục --</option>
                   {CATEGORIES.map(cat => (
