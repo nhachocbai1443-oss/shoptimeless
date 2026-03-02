@@ -57,7 +57,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 >
                   🔑 Đăng nhập
                 </Link>
-                <span className="text-[10px] text-gray-400 font-medium italic">Dành cho Admin</span>
+                <span className="text-[10px] text-gray-400 font-medium italic">Chỉ Dành cho Admin</span>
               </div>
             )}
         </div>
