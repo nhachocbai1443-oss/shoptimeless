@@ -29,7 +29,7 @@ const BUCKET_NAME = 'shop-images';
  */
 export const uploadImageToSupabase = async (
   file: File,
-  folder: 'products' | 'icons' = 'products'
+  folder: 'products' | 'icons' | 'qr' = 'products'
 ): Promise<string> => {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error(
