@@ -3,18 +3,30 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, where } from 'firebase/firestore';
 import { uploadImageToSupabase } from '../supabase';
-import { Product, User, UserRole, Order } from '../types';
+import { Product, User, UserRole, Order, Category } from '../types';
 import ProductTable from '../components/ProductTable';
 
 interface Props {
   user: User;
 }
 
-const CATEGORIES = [
-  'Học Tập – Công việc – Đồ họa',
-  'CÔNG CỤ',
-  'TÀI KHOẢN AI',
-  'GIẢI TRÍ NGHE NHẠC'
+// Danh mục mặc định (dùng khi Firestore chưa có dữ liệu)
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: '1', name: 'Học Tập – Công việc – Đồ họa', icon: '🎓', desc: 'Học tập / làm việc hiệu quả hơn với các tài khoản bản quyền.', color: 'from-blue-500 to-indigo-600', sort_order: 1 },
+  { id: '2', name: 'CÔNG CỤ', icon: '🛠️', desc: 'Các công cụ hỗ trợ đắc lực cho mọi nhu cầu.', color: 'from-orange-400 to-red-500', sort_order: 2 },
+  { id: '3', name: 'TÀI KHOẢN AI', icon: '🤖', desc: 'Các công cụ AI mạnh mẽ nhất hiện nay với giá ưu đãi ...', color: 'from-emerald-400 to-teal-600', sort_order: 3 },
+  { id: '4', name: 'GIẢI TRÍ NGHE NHẠC', icon: '🎵', desc: 'Giải trí thả ga, không lo về giá...', color: 'from-purple-500 to-pink-600', sort_order: 4 },
+];
+
+const GRADIENT_OPTIONS = [
+  { label: 'Xanh dương – Tím', value: 'from-blue-500 to-indigo-600' },
+  { label: 'Cam – Đỏ', value: 'from-orange-400 to-red-500' },
+  { label: 'Xanh lá – Ngọc', value: 'from-emerald-400 to-teal-600' },
+  { label: 'Tím – Hồng', value: 'from-purple-500 to-pink-600' },
+  { label: 'Hồng – Đỏ', value: 'from-pink-400 to-rose-500' },
+  { label: 'Vàng – Cam', value: 'from-yellow-400 to-orange-500' },
+  { label: 'Xanh lam – Xanh lá', value: 'from-cyan-400 to-green-500' },
+  { label: 'Xám – Đen', value: 'from-gray-400 to-gray-600' },
 ];
 
 const AdminDashboard: React.FC<Props> = ({ user }) => {
@@ -37,6 +49,14 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
   const [uploadingIcon, setUploadingIcon] = useState<number | null>(null);
   const [uploadingQR, setUploadingQR] = useState<number | null>(null);
 
+  // Categories State (trong Settings)
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [newCategory, setNewCategory] = useState<Partial<Category>>({
+    name: '', icon: '📦', desc: '', color: 'from-blue-500 to-indigo-600', sort_order: 99
+  });
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Partial<Category>>({});
+
   // Orders State
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -51,15 +71,12 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
   const fetchProducts = async () => {
     setLoadingProducts(true);
     try {
-      // FIX: Dùng orderBy đơn để tránh lỗi "requires a composite index" trên Firestore
-      // Sắp xếp is_hot ở client-side để tránh cần tạo composite index
       const q = query(
         collection(db, 'products'),
         orderBy('sort_order', 'asc')
       );
       const querySnapshot = await getDocs(q);
       const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-      // Sắp xếp: is_hot lên đầu, sau đó theo sort_order
       const sorted = data.sort((a: any, b: any) => {
         if (b.is_hot === a.is_hot) return (a.sort_order || 0) - (b.sort_order || 0);
         return b.is_hot ? 1 : -1;
@@ -67,7 +84,6 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
       setProducts(sorted || []);
     } catch (err: any) {
       console.error('Error fetching products:', err);
-      // Fallback: lấy tất cả không cần orderBy nếu field sort_order chưa tồn tại
       try {
         const fallbackSnap = await getDocs(collection(db, 'products'));
         const fallbackData = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
@@ -83,8 +99,6 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
   const fetchCtvs = async () => {
     setLoadingCtvs(true);
     try {
-      // FIX: Tránh dùng where + orderBy cùng lúc vì Firestore yêu cầu composite index
-      // => Lấy tất cả users rồi lọc + sắp xếp ở client-side
       const querySnapshot = await getDocs(collection(db, 'users'));
       const allUsers = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
       const ctvList = allUsers
@@ -129,9 +143,14 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
             bank_name: 'MoMo'
           }
         ]);
+        // Load categories từ Firestore, nếu chưa có thì dùng mặc định
+        setCategories(data.categories || DEFAULT_CATEGORIES);
+      } else {
+        setCategories(DEFAULT_CATEGORIES);
       }
     } catch (err) {
       console.error('Error fetching settings:', err);
+      setCategories(DEFAULT_CATEGORIES);
     }
   };
 
@@ -209,7 +228,8 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
     try {
       await setDoc(doc(db, 'app_settings', '1'), { 
         ctv_page_content: ctvPageContent,
-        payment_methods: paymentMethods
+        payment_methods: paymentMethods,
+        categories: categories
       }, { merge: true });
       alert('Đã lưu cài đặt!');
     } catch (err) {
@@ -292,6 +312,52 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
     } catch (err) {
       alert('Lỗi khi xóa đơn hàng!');
     }
+  };
+
+  // --- CATEGORY ACTIONS ---
+  const handleAddCategory = () => {
+    if (!newCategory.name?.trim()) {
+      alert('Vui lòng nhập tên danh mục!');
+      return;
+    }
+    const cat: Category = {
+      id: Date.now().toString(),
+      name: newCategory.name.trim(),
+      icon: newCategory.icon || '📦',
+      desc: newCategory.desc || '',
+      color: newCategory.color || 'from-blue-500 to-indigo-600',
+      sort_order: newCategory.sort_order || categories.length + 1,
+    };
+    setCategories(prev => [...prev, cat].sort((a, b) => a.sort_order - b.sort_order));
+    setNewCategory({ name: '', icon: '📦', desc: '', color: 'from-blue-500 to-indigo-600', sort_order: 99 });
+  };
+
+  const handleDeleteCategory = (id: string) => {
+    if (!window.confirm('Xóa danh mục này? Sản phẩm thuộc danh mục này sẽ không bị xóa.')) return;
+    setCategories(prev => prev.filter(c => c.id !== id));
+  };
+
+  const handleStartEditCategory = (cat: Category) => {
+    setEditingCategoryId(cat.id);
+    setEditingCategory({ ...cat });
+  };
+
+  const handleSaveEditCategory = () => {
+    if (!editingCategory.name?.trim()) {
+      alert('Tên danh mục không được để trống!');
+      return;
+    }
+    setCategories(prev =>
+      prev.map(c => c.id === editingCategoryId ? { ...c, ...editingCategory, name: editingCategory.name!.trim() } as Category : c)
+        .sort((a, b) => a.sort_order - b.sort_order)
+    );
+    setEditingCategoryId(null);
+    setEditingCategory({});
+  };
+
+  const handleCancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditingCategory({});
   };
 
   return (
@@ -413,6 +479,8 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
             </div>
           </div>
         )}
+
+        {/* PRODUCTS TAB */}
         {activeTab === 'products' && (
           <div className="space-y-6">
             <div className="flex justify-end">
@@ -527,6 +595,188 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
         {/* SETTINGS TAB */}
         {activeTab === 'settings' && (
           <div className="space-y-8">
+
+            {/* ===== QUẢN LÝ DANH MỤC ===== */}
+            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl">
+              <h3 className="text-2xl font-cute font-bold text-primary mb-2">Quản lý danh mục 🗂️</h3>
+              <p className="text-xs text-gray-400 mb-6">Thêm, sửa, xóa danh mục sản phẩm. Nhớ nhấn <strong>Lưu tất cả cài đặt</strong> ở cuối trang để áp dụng.</p>
+
+              {/* Danh sách danh mục hiện có */}
+              <div className="space-y-3 mb-6">
+                {categories.length === 0 && (
+                  <p className="text-center text-gray-400 italic text-sm py-4">Chưa có danh mục nào.</p>
+                )}
+                {categories.map((cat) => (
+                  <div key={cat.id} className="rounded-2xl border border-pink-50 bg-white/60 overflow-hidden">
+                    {editingCategoryId === cat.id ? (
+                      /* --- EDIT MODE --- */
+                      <div className="p-5 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tên danh mục</label>
+                            <input
+                              type="text"
+                              value={editingCategory.name || ''}
+                              onChange={(e) => setEditingCategory(p => ({ ...p, name: e.target.value }))}
+                              className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Icon (emoji)</label>
+                            <input
+                              type="text"
+                              value={editingCategory.icon || ''}
+                              onChange={(e) => setEditingCategory(p => ({ ...p, icon: e.target.value }))}
+                              className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm"
+                              placeholder="VD: 🎓"
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Mô tả ngắn</label>
+                            <input
+                              type="text"
+                              value={editingCategory.desc || ''}
+                              onChange={(e) => setEditingCategory(p => ({ ...p, desc: e.target.value }))}
+                              className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm"
+                              placeholder="Mô tả ngắn về danh mục..."
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Màu gradient</label>
+                            <select
+                              value={editingCategory.color || ''}
+                              onChange={(e) => setEditingCategory(p => ({ ...p, color: e.target.value }))}
+                              className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm bg-white"
+                            >
+                              {GRADIENT_OPTIONS.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Thứ tự hiển thị</label>
+                            <input
+                              type="number"
+                              value={editingCategory.sort_order ?? ''}
+                              onChange={(e) => setEditingCategory(p => ({ ...p, sort_order: Number(e.target.value) }))}
+                              className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={handleCancelEditCategory}
+                            className="px-5 py-2 rounded-xl text-sm font-bold text-gray-500 border border-gray-200 hover:bg-gray-50 transition-all"
+                          >
+                            Hủy
+                          </button>
+                          <button
+                            onClick={handleSaveEditCategory}
+                            className="px-5 py-2 rounded-xl text-sm font-bold bg-primary text-white hover:bg-pink-600 transition-all shadow-md"
+                          >
+                            ✅ Lưu thay đổi
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* --- VIEW MODE --- */
+                      <div className="flex items-center gap-4 px-5 py-4">
+                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${cat.color} flex items-center justify-center text-white text-xl shadow-sm shrink-0`}>
+                          {cat.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-gray-800 text-sm truncate">{cat.name}</p>
+                          <p className="text-xs text-gray-400 truncate">{cat.desc || 'Chưa có mô tả'}</p>
+                        </div>
+                        <span className="text-[10px] text-gray-300 font-mono hidden md:block">#{cat.sort_order}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleStartEditCategory(cat)}
+                            className="w-8 h-8 flex items-center justify-center bg-yellow-50 text-yellow-600 rounded-xl hover:bg-yellow-100 transition-colors border border-yellow-100 text-sm"
+                            title="Sửa"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors border border-red-100 text-sm"
+                            title="Xóa"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Form thêm danh mục mới */}
+              <div className="border-t-2 border-pink-50 pt-6">
+                <p className="text-sm font-bold text-gray-600 mb-4">➕ Thêm danh mục mới</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Tên danh mục *</label>
+                    <input
+                      type="text"
+                      value={newCategory.name || ''}
+                      onChange={(e) => setNewCategory(p => ({ ...p, name: e.target.value }))}
+                      placeholder="VD: PHẦN MỀM"
+                      className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Icon (emoji)</label>
+                    <input
+                      type="text"
+                      value={newCategory.icon || ''}
+                      onChange={(e) => setNewCategory(p => ({ ...p, icon: e.target.value }))}
+                      placeholder="VD: 💻"
+                      className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Mô tả ngắn</label>
+                    <input
+                      type="text"
+                      value={newCategory.desc || ''}
+                      onChange={(e) => setNewCategory(p => ({ ...p, desc: e.target.value }))}
+                      placeholder="Mô tả ngắn về danh mục..."
+                      className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Màu gradient</label>
+                    <select
+                      value={newCategory.color || ''}
+                      onChange={(e) => setNewCategory(p => ({ ...p, color: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm bg-white"
+                    >
+                      {GRADIENT_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Thứ tự hiển thị</label>
+                    <input
+                      type="number"
+                      value={newCategory.sort_order ?? ''}
+                      onChange={(e) => setNewCategory(p => ({ ...p, sort_order: Number(e.target.value) }))}
+                      placeholder="VD: 5"
+                      className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleAddCategory}
+                  className="bg-secondary hover:bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md"
+                >
+                  ➕ Thêm danh mục
+                </button>
+              </div>
+            </div>
+
             {/* CTV Content */}
             <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl">
               <h3 className="text-2xl font-cute font-bold text-primary mb-6">Cài đặt trang Cộng tác viên 📝</h3>
