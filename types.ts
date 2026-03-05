@@ -27,6 +27,7 @@ export interface Product {
   discount_percent?: number; // Phần trăm giảm giá
   is_hot?: boolean; // Sản phẩm hot
   sort_order?: number; // Thứ tự sắp xếp
+  in_stock?: boolean; // Tình trạng còn hàng (mặc định true nếu không có)
   notes: string;
   category: string;
   created_at?: string;
@@ -47,10 +48,20 @@ export interface PaymentMethod {
   custom_qr_url?: string; // Ảnh QR tùy chỉnh (dùng cho MoMo, ZaloPay thay vì VietQR tự động)
 }
 
+export interface Category {
+  id: string;
+  name: string;
+  icon: string;
+  desc: string;
+  color: string;
+  sort_order: number;
+}
+
 export interface AppSettings {
   id: number;
   ctv_page_content: string;
   payment_methods: PaymentMethod[];
+  categories?: Category[];
 }
 
 export interface Order {
