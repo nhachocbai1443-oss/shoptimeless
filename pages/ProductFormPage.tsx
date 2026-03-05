@@ -3,17 +3,18 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, doc, getDoc, addDoc, updateDoc } from 'firebase/firestore';
 import { uploadImageToSupabase } from '../supabase';
-import { Product, User } from '../types';
+import { Product, User, Category } from '../types';
 
 interface Props {
   user: User;
 }
 
-const CATEGORIES = [
-  'Học Tập – Công việc – Đồ họa',
-  'CÔNG CỤ',
-  'TÀI KHOẢN AI',
-  'GIẢI TRÍ NGHE NHẠC'
+// Danh mục mặc định (fallback khi Firestore chưa có dữ liệu)
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: '1', name: 'Học Tập – Công việc – Đồ họa', icon: '🎓', desc: '', color: 'from-blue-500 to-indigo-600', sort_order: 1 },
+  { id: '2', name: 'CÔNG CỤ', icon: '🛠️', desc: '', color: 'from-orange-400 to-red-500', sort_order: 2 },
+  { id: '3', name: 'TÀI KHOẢN AI', icon: '🤖', desc: '', color: 'from-emerald-400 to-teal-600', sort_order: 3 },
+  { id: '4', name: 'GIẢI TRÍ NGHE NHẠC', icon: '🎵', desc: '', color: 'from-purple-500 to-pink-600', sort_order: 4 },
 ];
 
 const ProductFormPage: React.FC<Props> = ({ user }) => {
@@ -24,9 +25,10 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
 
   const [form, setForm] = useState<Partial<Product>>({
-    category: CATEGORIES[0],
+    category: DEFAULT_CATEGORIES[0].name,
     name: '',
     image_url: '',
     form: '',
@@ -37,9 +39,33 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
     discount_percent: 0,
     sort_order: 0,
     is_hot: false,
+    in_stock: true,
     notes: '',
     variants: []
   });
+
+  // Load danh mục từ Firestore
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const docRef = doc(db, 'app_settings', '1');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().categories && docSnap.data().categories.length > 0) {
+          const cats: Category[] = docSnap.data().categories;
+          const sorted = [...cats].sort((a, b) => a.sort_order - b.sort_order);
+          setCategories(sorted);
+          // Nếu đang thêm mới thì set category mặc định là danh mục đầu tiên
+          if (!isEdit) {
+            setForm(prev => ({ ...prev, category: sorted[0]?.name || DEFAULT_CATEGORIES[0].name }));
+          }
+        }
+      } catch (err) {
+        console.error('Error loading categories:', err);
+        // Giữ DEFAULT_CATEGORIES nếu lỗi
+      }
+    };
+    loadCategories();
+  }, []);
 
   useEffect(() => {
     if (user.role !== 'admin') {
@@ -107,7 +133,6 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
           price_public: Number(v.price_public) || 0,
           price_ctv: Number(v.price_ctv) || 0,
         };
-        // Chỉ lưu price_ctvtime nếu có giá trị hợp lệ
         if (v.price_ctvtime !== undefined && v.price_ctvtime !== null && v.price_ctvtime !== '' && Number(v.price_ctvtime) > 0) {
           cleaned.price_ctvtime = Number(v.price_ctvtime);
         }
@@ -115,7 +140,6 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
       });
       productData.price_public = Number(productData.price_public) || 0;
       productData.price_ctv = Number(productData.price_ctv) || 0;
-      // Chỉ lưu price_ctvtime nếu có giá trị hợp lệ
       if (productData.price_ctvtime !== undefined && productData.price_ctvtime !== null && productData.price_ctvtime !== '' && Number(productData.price_ctvtime) > 0) {
         productData.price_ctvtime = Number(productData.price_ctvtime);
       } else {
@@ -124,11 +148,13 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
       productData.discount_percent = Number(productData.discount_percent) || 0;
       productData.sort_order = Number(productData.sort_order) || 0;
       productData.is_hot = Boolean(productData.is_hot);
+      // Lưu in_stock: mặc định true nếu không có
+      productData.in_stock = productData.in_stock !== undefined ? Boolean(productData.in_stock) : true;
       productData.notes = productData.notes || '';
       productData.image_url = productData.image_url || '';
       productData.form = productData.form || '';
       productData.package = productData.package || '';
-      productData.category = productData.category || CATEGORIES[0];
+      productData.category = productData.category || categories[0]?.name || DEFAULT_CATEGORIES[0].name;
 
       if (isEdit) {
         await updateDoc(doc(db, 'products', productId!), productData);
@@ -187,8 +213,8 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
               className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all bg-white"
             >
               <option value="">-- Chọn danh mục --</option>
-              {CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.name}>{cat.icon} {cat.name}</option>
               ))}
             </select>
           </div>
@@ -336,18 +362,32 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
             </div>
           </div>
 
-          {/* Is Hot */}
-          <div className="flex items-center gap-3 bg-pink-50/50 p-4 rounded-2xl border-2 border-pink-50">
-            <input
-              type="checkbox"
-              id="is_hot"
-              checked={form.is_hot || false}
-              onChange={(e) => setForm(prev => ({ ...prev, is_hot: e.target.checked }))}
-              className="w-5 h-5 accent-primary cursor-pointer"
-            />
-            <label htmlFor="is_hot" className="text-sm font-bold text-gray-700 cursor-pointer">
-              🔥 Đánh dấu là sản phẩm HOT (Đưa lên đầu danh sách)
-            </label>
+          {/* Is Hot + In Stock */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex items-center gap-3 bg-pink-50/50 p-4 rounded-2xl border-2 border-pink-50">
+              <input
+                type="checkbox"
+                id="is_hot"
+                checked={form.is_hot || false}
+                onChange={(e) => setForm(prev => ({ ...prev, is_hot: e.target.checked }))}
+                className="w-5 h-5 accent-primary cursor-pointer"
+              />
+              <label htmlFor="is_hot" className="text-sm font-bold text-gray-700 cursor-pointer">
+                🔥 Đánh dấu là sản phẩm HOT (Đưa lên đầu danh sách)
+              </label>
+            </div>
+            <div className="flex items-center gap-3 bg-green-50/50 p-4 rounded-2xl border-2 border-green-50">
+              <input
+                type="checkbox"
+                id="in_stock"
+                checked={form.in_stock !== false}
+                onChange={(e) => setForm(prev => ({ ...prev, in_stock: e.target.checked }))}
+                className="w-5 h-5 accent-green-500 cursor-pointer"
+              />
+              <label htmlFor="in_stock" className="text-sm font-bold text-gray-700 cursor-pointer">
+                ✅ Còn hàng (bỏ chọn = Hết hàng)
+              </label>
+            </div>
           </div>
 
           {/* Ghi chú */}
@@ -450,13 +490,16 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
             </button>
             <button
               type="submit"
-              disabled={saving}
-              className="bg-primary text-white px-12 py-3 rounded-xl font-bold shadow-lg hover:bg-pink-600 transition-all disabled:bg-gray-300"
+              disabled={saving || uploading}
+              className="bg-primary hover:bg-pink-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 transition-all disabled:bg-gray-300 flex items-center gap-2"
             >
-              {saving ? '🚀 Đang lưu...' : '💾 Lưu sản phẩm'}
+              {saving ? (
+                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Đang lưu...</>
+              ) : (
+                isEdit ? '✅ Cập nhật sản phẩm' : '➕ Thêm sản phẩm'
+              )}
             </button>
           </div>
-
         </form>
       </div>
     </div>
