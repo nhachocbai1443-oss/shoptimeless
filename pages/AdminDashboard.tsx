@@ -169,7 +169,11 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
   };
 
   useEffect(() => {
-    if (activeTab === 'products') fetchProducts();
+    if (activeTab === 'products') {
+      fetchProducts();
+      // Load categories để phân nhóm sản phẩm trong tab admin
+      if (categories.length === 0) fetchSettings();
+    }
     if (activeTab === 'ctvs') fetchCtvs();
     if (activeTab === 'settings') fetchSettings();
     if (activeTab === 'orders') fetchOrders();
@@ -502,6 +506,8 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
                 onDelete={handleDeleteProduct}
                 showCategory={true}
                 showSortOrder={true}
+                groupByCategory={true}
+                categories={categories}
               />
             )}
           </div>
