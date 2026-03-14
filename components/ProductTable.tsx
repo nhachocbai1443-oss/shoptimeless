@@ -172,11 +172,11 @@ const ProductTable: React.FC<ProductTableProps> = ({
             )}
           </div>
         </td>
-        <td className="px-6 py-4">
-          <div className="flex flex-col gap-3">
+        <td className="px-6 py-4 min-w-[220px]">
+          <div className="flex flex-col gap-2">
             <button
               onClick={() => handleOpenNotesModal(product)}
-              className="text-xs text-gray-500 hover:text-primary transition-colors leading-relaxed max-w-[180px] line-clamp-2 text-left font-medium hover:underline"
+              className="text-xs text-gray-500 hover:text-primary transition-colors leading-relaxed line-clamp-2 text-left font-medium hover:underline"
               title={product.notes}
             >
               {product.notes}
@@ -226,7 +226,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
     if (!showNotesModal || !selectedProductForModal) return null;
 
     return (
-      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 animate-fade-in">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-fade-in">
         {/* Backdrop */}
         <div 
           className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -234,11 +234,11 @@ const ProductTable: React.FC<ProductTableProps> = ({
         ></div>
         
         {/* Modal Content */}
-        <div className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-8 flex flex-col gap-6 animate-slide-up">
+        <div className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-8 flex flex-col gap-6 animate-slide-up">
           {/* Close Button */}
           <button
             onClick={handleCloseNotesModal}
-            className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-600 font-bold text-xl"
+            className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-600 font-bold text-xl z-10"
           >
             ✕
           </button>
@@ -267,35 +267,35 @@ const ProductTable: React.FC<ProductTableProps> = ({
           <div className="space-y-4">
             {/* Hình thức */}
             <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
-              <div className="text-2xl">📋</div>
-              <div className="flex-1">
+              <div className="text-2xl shrink-0">📋</div>
+              <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Hình thức</h3>
-                <p className="text-gray-900 font-bold text-base">{selectedProductForModal.form}</p>
+                <p className="text-gray-900 font-bold text-base break-words">{selectedProductForModal.form}</p>
               </div>
             </div>
 
             {/* Gói */}
             <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
-              <div className="text-2xl">📦</div>
-              <div className="flex-1">
+              <div className="text-2xl shrink-0">📦</div>
+              <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Gói</h3>
-                <p className="text-gray-900 font-bold text-base">{selectedProductForModal.package}</p>
+                <p className="text-gray-900 font-bold text-base break-words">{selectedProductForModal.package}</p>
               </div>
             </div>
 
             {/* Danh mục */}
             <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
-              <div className="text-2xl">🏷️</div>
-              <div className="flex-1">
+              <div className="text-2xl shrink-0">🏷️</div>
+              <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Danh mục</h3>
-                <p className="text-gray-900 font-bold text-base">{selectedProductForModal.category}</p>
+                <p className="text-gray-900 font-bold text-base break-words">{selectedProductForModal.category}</p>
               </div>
             </div>
 
             {/* Giá */}
             <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
-              <div className="text-2xl">💰</div>
-              <div className="flex-1">
+              <div className="text-2xl shrink-0">💰</div>
+              <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Giá</h3>
                 <div className="space-y-1">
                   <p className="text-gray-900 font-bold text-lg">
@@ -312,8 +312,8 @@ const ProductTable: React.FC<ProductTableProps> = ({
 
             {/* Tình trạng hàng */}
             <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
-              <div className="text-2xl">📊</div>
-              <div className="flex-1">
+              <div className="text-2xl shrink-0">📊</div>
+              <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Tình trạng</h3>
                 <p className={`font-bold text-base ${selectedProductForModal.in_stock !== false ? 'text-green-600' : 'text-red-600'}`}>
                   {selectedProductForModal.in_stock !== false ? '✅ Còn hàng' : '❌ Hết hàng'}
@@ -323,10 +323,10 @@ const ProductTable: React.FC<ProductTableProps> = ({
 
             {/* Chú thích / Mô tả */}
             <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
-              <div className="text-2xl">📝</div>
-              <div className="flex-1">
+              <div className="text-2xl shrink-0">📝</div>
+              <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Chú thích / Mô tả</h3>
-                <p className="text-gray-800 leading-relaxed whitespace-pre-wrap text-base">
+                <p className="text-gray-800 leading-relaxed whitespace-pre-wrap text-base break-words">
                   {selectedProductForModal.notes}
                 </p>
               </div>
@@ -335,13 +335,13 @@ const ProductTable: React.FC<ProductTableProps> = ({
             {/* Các biến thể (nếu có) */}
             {selectedProductForModal.variants && selectedProductForModal.variants.length > 0 && (
               <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
-                <div className="text-2xl">🔄</div>
-                <div className="flex-1">
+                <div className="text-2xl shrink-0">🔄</div>
+                <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-3">Các lựa chọn khác</h3>
                   <div className="space-y-2">
                     {selectedProductForModal.variants.map((variant, idx) => (
                       <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                        <p className="font-bold text-gray-800 mb-1">{variant.form}</p>
+                        <p className="font-bold text-gray-800 mb-1 break-words">{variant.form}</p>
                         <div className="text-sm text-gray-600 space-y-0.5">
                           <p>Giá công khai: <span className="font-bold text-gray-900">{variant.price_public.toLocaleString('vi-VN')}đ</span></p>
                           <p>Giá CTV: <span className="font-bold text-green-600">{variant.price_ctv.toLocaleString('vi-VN')}đ</span></p>
