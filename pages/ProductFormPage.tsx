@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, doc, getDoc, addDoc, updateDoc } from 'firebase/firestore';
@@ -23,9 +23,12 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
   const isEdit = productId && productId !== 'new';
 
   const [uploading, setUploading] = useState(false);
+  const [uploadingNote, setUploadingNote] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
 
   const [form, setForm] = useState<Partial<Product>>({
     category: DEFAULT_CATEGORIES[0].name,
@@ -54,14 +57,12 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
           const cats: Category[] = docSnap.data().categories;
           const sorted = [...cats].sort((a, b) => a.sort_order - b.sort_order);
           setCategories(sorted);
-          // Nếu đang thêm mới thì set category mặc định là danh mục đầu tiên
           if (!isEdit) {
             setForm(prev => ({ ...prev, category: sorted[0]?.name || DEFAULT_CATEGORIES[0].name }));
           }
         }
       } catch (err) {
         console.error('Error loading categories:', err);
-        // Giữ DEFAULT_CATEGORIES nếu lỗi
       }
     };
     loadCategories();
@@ -99,6 +100,73 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
     }
   };
 
+  // Chèn text vào vị trí con trỏ trong textarea ghi chú
+  const insertTextAtCursor = useCallback((text: string) => {
+    const textarea = notesRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentValue = textarea.value;
+    const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
+    setForm(prev => ({ ...prev, notes: newValue }));
+    // Đặt lại vị trí con trỏ sau khi chèn
+    setTimeout(() => {
+      textarea.focus();
+      textarea.selectionStart = start + text.length;
+      textarea.selectionEnd = start + text.length;
+    }, 0);
+  }, []);
+
+  // Upload ảnh cho ghi chú và chèn markdown
+  const uploadNoteImage = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    setUploadingNote(true);
+    try {
+      const publicUrl = await uploadImageToSupabase(file, 'products');
+      insertTextAtCursor(`\n![ảnh](${publicUrl})\n`);
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi tải ảnh lên!');
+    } finally {
+      setUploadingNote(false);
+    }
+  }, [insertTextAtCursor]);
+
+  // Xử lý paste ảnh vào textarea
+  const handleNotesPaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (file) await uploadNoteImage(file);
+        return;
+      }
+    }
+  }, [uploadNoteImage]);
+
+  // Xử lý kéo thả ảnh vào textarea
+  const handleNotesDrop = useCallback(async (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+    for (let i = 0; i < files.length; i++) {
+      if (files[i].type.startsWith('image/')) {
+        await uploadNoteImage(files[i]);
+      }
+    }
+  }, [uploadNoteImage]);
+
+  // Xử lý upload ảnh qua nút chèn ảnh
+  const handleNoteImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    for (let i = 0; i < e.target.files.length; i++) {
+      await uploadNoteImage(e.target.files[i]);
+    }
+    e.target.value = '';
+  };
+
   const addVariant = () => {
     setForm(prev => ({
       ...prev,
@@ -126,7 +194,6 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
       const { id, ...productData } = form as any;
       if (!productData.variants || !Array.isArray(productData.variants)) productData.variants = [];
       productData.variants = productData.variants.filter((v: any) => v.form && v.form.trim() !== '');
-      // Xử lý price_ctvtime cho từng variant
       productData.variants = productData.variants.map((v: any) => {
         const cleaned: any = {
           form: v.form,
@@ -148,7 +215,6 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
       productData.discount_percent = Number(productData.discount_percent) || 0;
       productData.sort_order = Number(productData.sort_order) || 0;
       productData.is_hot = Boolean(productData.is_hot);
-      // Lưu in_stock: mặc định true nếu không có
       productData.in_stock = productData.in_stock !== undefined ? Boolean(productData.in_stock) : true;
       productData.notes = productData.notes || '';
       productData.image_url = productData.image_url || '';
@@ -326,9 +392,9 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
               min="0"
               value={form.price_ctvtime ?? ''}
               onFocus={(e) => e.target.select()}
-              onChange={(e) => setForm(prev => ({ 
-                ...prev, 
-                price_ctvtime: e.target.value === '' ? undefined : Number(e.target.value) 
+              onChange={(e) => setForm(prev => ({
+                ...prev,
+                price_ctvtime: e.target.value === '' ? undefined : Number(e.target.value)
               }))}
               placeholder="Nhập giá riêng cho ctvtime (để trống = dùng giá CTV chung)"
               className="w-full px-4 py-3 rounded-xl border-2 border-amber-200 focus:border-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-100 transition-all bg-white"
@@ -390,15 +456,63 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
             </div>
           </div>
 
-          {/* Ghi chú */}
+          {/* Ghi chú - hỗ trợ dán ảnh */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Ghi chú</label>
-            <textarea
-              value={form.notes || ''}
-              onChange={(e) => setForm(prev => ({ ...prev, notes: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              rows={3}
-            />
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-bold text-gray-700">
+                Ghi chú
+                <span className="ml-2 text-xs font-normal text-gray-400">(hỗ trợ Markdown, dán ảnh Ctrl+V hoặc kéo thả)</span>
+              </label>
+              <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all border ${uploadingNote ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-50 border-blue-100 text-blue-600 hover:bg-blue-100'}`}>
+                {uploadingNote ? (
+                  <><div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div> Đang tải...</>
+                ) : (
+                  <>🖼️ Chèn ảnh</>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleNoteImageUpload}
+                  disabled={uploadingNote}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            <div
+              className={`relative rounded-xl border-2 transition-all ${isDragOver ? 'border-blue-400 bg-blue-50' : 'border-pink-50'}`}
+              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+              onDragLeave={() => setIsDragOver(false)}
+            >
+              {isDragOver && (
+                <div className="absolute inset-0 flex items-center justify-center bg-blue-50/80 rounded-xl z-10 pointer-events-none">
+                  <div className="text-blue-500 font-bold text-sm flex flex-col items-center gap-2">
+                    <span className="text-3xl">🖼️</span>
+                    Thả ảnh vào đây để chèn
+                  </div>
+                </div>
+              )}
+              <textarea
+                ref={notesRef}
+                value={form.notes || ''}
+                onChange={(e) => setForm(prev => ({ ...prev, notes: e.target.value }))}
+                onPaste={handleNotesPaste}
+                onDrop={handleNotesDrop}
+                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={() => setIsDragOver(false)}
+                className="w-full px-4 py-3 rounded-xl focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all bg-transparent resize-y"
+                rows={8}
+                placeholder="Nhập ghi chú, mô tả sản phẩm...&#10;&#10;Hỗ trợ:&#10;• Ctrl+V để dán ảnh từ clipboard&#10;• Kéo thả ảnh vào đây&#10;• Nút 🖼️ Chèn ảnh ở trên&#10;• **in đậm**, # Tiêu đề, > trích dẫn"
+              />
+            </div>
+
+            {uploadingNote && (
+              <p className="text-xs text-blue-500 mt-1 flex items-center gap-1">
+                <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                Đang upload ảnh lên server...
+              </p>
+            )}
           </div>
 
           {/* Variants */}
@@ -490,7 +604,7 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
             </button>
             <button
               type="submit"
-              disabled={saving || uploading}
+              disabled={saving || uploading || uploadingNote}
               className="bg-primary hover:bg-pink-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 transition-all disabled:bg-gray-300 flex items-center gap-2"
             >
               {saving ? (
