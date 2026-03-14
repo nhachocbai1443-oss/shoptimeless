@@ -157,14 +157,21 @@ const ProductTable: React.FC<ProductTableProps> = ({
           </div>
         </td>
         {/* CỘT GHI CHÚ - NHẤN VÀO ĐI TRANG MỚI */}
-        <td className="px-6 py-4 min-w-[300px]">
-          <button
-            onClick={() => handleViewNotes(product)}
-            className="text-sm text-gray-700 hover:text-primary transition-colors leading-relaxed line-clamp-3 text-left font-medium hover:underline cursor-pointer bg-gray-50 hover:bg-gray-100 p-3 rounded-lg w-full text-justify"
-            title={product.notes}
-          >
-            {product.notes}
-          </button>
+        <td className="px-6 py-4 min-w-[200px] max-w-[300px]">
+          {product.notes ? (
+            <button
+              onClick={() => handleViewNotes(product)}
+              className="text-sm text-gray-700 hover:text-primary transition-colors text-left font-medium hover:underline cursor-pointer bg-gray-50 hover:bg-gray-100 p-3 rounded-lg w-full"
+              title="Nhấn để xem đầy đủ"
+            >
+              <span className="block overflow-hidden" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                {product.notes}
+              </span>
+              <span className="text-xs text-primary font-bold mt-1 block">Xem thêm →</span>
+            </button>
+          ) : (
+            <span className="text-xs text-gray-300 italic">Không có ghi chú</span>
+          )}
         </td>
         {/* CỘT NÚT MUA NGAY */}
         <td className="px-6 py-4">
