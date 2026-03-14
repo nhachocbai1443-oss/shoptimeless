@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import CheckoutPage from './pages/CheckoutPage';
 import ProductFormPage from './pages/ProductFormPage';
+import ProductNotesPage from './pages/ProductNotesPage';
 import { User } from './types';
 
 function App() {
@@ -59,6 +60,8 @@ function App() {
           />
 
           <Route path="/checkout/:productId" element={<CheckoutPage user={user} />} />
+
+          <Route path="/product-notes/:productId" element={<ProductNotesPage />} />
           
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
