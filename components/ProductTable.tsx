@@ -161,7 +161,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
           {product.notes ? (
             <button
               onClick={() => handleViewNotes(product)}
-              className="text-sm text-gray-700 hover:text-primary transition-colors text-left font-medium hover:underline cursor-pointer bg-gray-50 hover:bg-gray-100 p-3 rounded-lg w-full"
+              className="text-sm text-gray-700 hover:text-primary transition-colors text-left font-medium cursor-pointer bg-gray-50 hover:bg-gray-100 p-3 rounded-lg w-full"
               title="Nhấn để xem đầy đủ"
             >
               <span className="block overflow-hidden" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
