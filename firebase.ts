@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 
 /**
  * Firebase chỉ dùng cho:
@@ -21,3 +21,21 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+// Đặt persistence cho Firebase Auth thành LOCAL (lưu vào localStorage)
+// để token không bị mất khi tab bị ẩn hoặc sau thời gian dài không hoạt động.
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+  console.warn("Firebase Auth persistence error:", err);
+});
+
+// Bật Firestore offline persistence (IndexedDB) để cache dữ liệu cục bộ
+// và tránh lỗi "Failed to get document" khi mạng chậm hoặc token đang refresh.
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code === "failed-precondition") {
+    // Nhiều tab đang mở cùng lúc — chỉ một tab được dùng persistence
+    console.warn("Firestore persistence: multiple tabs open.");
+  } else if (err.code === "unimplemented") {
+    // Trình duyệt không hỗ trợ
+    console.warn("Firestore persistence: not supported in this browser.");
+  }
+});
