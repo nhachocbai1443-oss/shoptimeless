@@ -1,509 +1,490 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { db } from '../firebase';
-import { collection, doc, getDoc, addDoc, updateDoc } from 'firebase/firestore';
-import { uploadImageToSupabase } from '../supabase';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Product, User, Category } from '../types';
 
-interface Props {
-  user: User;
+interface ProductTableProps {
+  products: Product[];
+  user: User | null;
+  onEdit?: (product: Product) => void;
+  onDelete?: (id: string) => void;
+  showCategory?: boolean;
+  showSortOrder?: boolean;
+  // Chế độ phân nhóm theo danh mục (dùng cho trang admin)
+  groupByCategory?: boolean;
+  // Danh sách danh mục (để lấy icon, màu, thứ tự)
+  categories?: Category[];
 }
 
-// Danh mục mặc định (fallback khi Firestore chưa có dữ liệu)
-const DEFAULT_CATEGORIES: Category[] = [
-  { id: '1', name: 'Học Tập – Công việc – Đồ họa', icon: '🎓', desc: '', color: 'from-blue-500 to-indigo-600', sort_order: 1 },
-  { id: '2', name: 'CÔNG CỤ', icon: '🛠️', desc: '', color: 'from-orange-400 to-red-500', sort_order: 2 },
-  { id: '3', name: 'TÀI KHOẢN AI', icon: '🤖', desc: '', color: 'from-emerald-400 to-teal-600', sort_order: 3 },
-  { id: '4', name: 'GIẢI TRÍ NGHE NHẠC', icon: '🎵', desc: '', color: 'from-purple-500 to-pink-600', sort_order: 4 },
-];
-
-const ProductFormPage: React.FC<Props> = ({ user }) => {
+const ProductTable: React.FC<ProductTableProps> = ({ 
+  products, 
+  user, 
+  onEdit, 
+  onDelete, 
+  showCategory = false,
+  showSortOrder = false,
+  groupByCategory = false,
+  categories = [],
+}) => {
   const navigate = useNavigate();
-  const { productId } = useParams<{ productId: string }>();
-  const isEdit = productId && productId !== 'new';
+  const isAdmin = user?.role === 'admin';
+  const isCTV = user?.role === 'ctv';
+  // Kiểm tra có phải CTV đặc biệt ctvtime không
+  const isCtvtime = isCTV && user?.username === 'ctvtime';
+  const [selectedVariantIndices, setSelectedVariantIndices] = useState<Record<string, number>>({});
+  // State cho modal chú thích sản phẩm
+  const [showNotesModal, setShowNotesModal] = useState(false);
+  const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
 
-  const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
+  const handleBuyNow = (product: Product) => {
+    navigate(`/checkout/${product.id}`);
+  };
 
-  const [form, setForm] = useState<Partial<Product>>({
-    category: DEFAULT_CATEGORIES[0].name,
-    name: '',
-    image_url: '',
-    form: '',
-    package: '',
-    price_public: 0,
-    price_ctv: 0,
-    price_ctvtime: undefined,
-    discount_percent: 0,
-    sort_order: 0,
-    is_hot: false,
-    in_stock: true,
-    notes: '',
-    variants: []
-  });
+  // Hàm mở modal chú thích sản phẩm
+  const handleOpenNotesModal = (product: Product) => {
+    setSelectedProductForModal(product);
+    setShowNotesModal(true);
+  };
 
-  // Load danh mục từ Firestore
-  useEffect(() => {
-    const loadCategories = async () => {
-      try {
-        const docRef = doc(db, 'app_settings', '1');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data().categories && docSnap.data().categories.length > 0) {
-          const cats: Category[] = docSnap.data().categories;
-          const sorted = [...cats].sort((a, b) => a.sort_order - b.sort_order);
-          setCategories(sorted);
-          // Nếu đang thêm mới thì set category mặc định là danh mục đầu tiên
-          if (!isEdit) {
-            setForm(prev => ({ ...prev, category: sorted[0]?.name || DEFAULT_CATEGORIES[0].name }));
-          }
-        }
-      } catch (err) {
-        console.error('Error loading categories:', err);
-        // Giữ DEFAULT_CATEGORIES nếu lỗi
-      }
-    };
-    loadCategories();
-  }, []);
+  // Hàm đóng modal
+  const handleCloseNotesModal = () => {
+    setShowNotesModal(false);
+    setSelectedProductForModal(null);
+  };
 
-  useEffect(() => {
-    if (user.role !== 'admin') {
-      navigate('/');
-      return;
+  // Hàm lấy giá phù hợp theo loại user
+  const getPrice = (
+    price_public: number,
+    price_ctv: number,
+    price_ctvtime?: number
+  ): number => {
+    if (isCtvtime) {
+      return (price_ctvtime && price_ctvtime > 0) ? price_ctvtime : price_ctv;
     }
-    if (isEdit) {
-      setLoading(true);
-      getDoc(doc(db, 'products', productId!))
-        .then(snap => {
-          if (snap.exists()) {
-            setForm({ id: snap.id, ...snap.data() } as any);
-          }
-        })
-        .catch(err => console.error(err))
-        .finally(() => setLoading(false));
+    if (isCTV) {
+      return price_ctv;
     }
-  }, [productId]);
-
-  const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    setUploading(true);
-    try {
-      const file = e.target.files[0];
-      const publicUrl = await uploadImageToSupabase(file, 'products');
-      setForm(prev => ({ ...prev, image_url: publicUrl }));
-    } catch (err: any) {
-      alert(err.message || 'Lỗi khi tải ảnh lên!');
-    } finally {
-      setUploading(false);
-    }
+    return price_public;
   };
 
-  const addVariant = () => {
-    setForm(prev => ({
-      ...prev,
-      variants: [...(prev.variants || []), { form: '', price_public: 0, price_ctv: 0, price_ctvtime: undefined }]
-    }));
-  };
+  // ---- RENDER MỘT HÀNG SẢN PHẨM ----
+  const renderProductRow = (product: Product, rankInCategory?: number) => {
+    const inStock = product.in_stock !== false;
 
-  const removeVariant = (index: number) => {
-    const v = [...(form.variants || [])];
-    v.splice(index, 1);
-    setForm(prev => ({ ...prev, variants: v }));
-  };
-
-  const updateVariant = (index: number, field: string, value: any) => {
-    const v = [...(form.variants || [])];
-    v[index] = { ...v[index], [field]: value };
-    setForm(prev => ({ ...prev, variants: v }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name) { alert('Vui lòng nhập tên sản phẩm!'); return; }
-    setSaving(true);
-    try {
-      const { id, ...productData } = form as any;
-      if (!productData.variants || !Array.isArray(productData.variants)) productData.variants = [];
-      productData.variants = productData.variants.filter((v: any) => v.form && v.form.trim() !== '');
-      // Xử lý price_ctvtime cho từng variant
-      productData.variants = productData.variants.map((v: any) => {
-        const cleaned: any = {
-          form: v.form,
-          price_public: Number(v.price_public) || 0,
-          price_ctv: Number(v.price_ctv) || 0,
-        };
-        if (v.price_ctvtime !== undefined && v.price_ctvtime !== null && v.price_ctvtime !== '' && Number(v.price_ctvtime) > 0) {
-          cleaned.price_ctvtime = Number(v.price_ctvtime);
-        }
-        return cleaned;
-      });
-      productData.price_public = Number(productData.price_public) || 0;
-      productData.price_ctv = Number(productData.price_ctv) || 0;
-      if (productData.price_ctvtime !== undefined && productData.price_ctvtime !== null && productData.price_ctvtime !== '' && Number(productData.price_ctvtime) > 0) {
-        productData.price_ctvtime = Number(productData.price_ctvtime);
-      } else {
-        delete productData.price_ctvtime;
-      }
-      productData.discount_percent = Number(productData.discount_percent) || 0;
-      productData.sort_order = Number(productData.sort_order) || 0;
-      productData.is_hot = Boolean(productData.is_hot);
-      // Lưu in_stock: mặc định true nếu không có
-      productData.in_stock = productData.in_stock !== undefined ? Boolean(productData.in_stock) : true;
-      productData.notes = productData.notes || '';
-      productData.image_url = productData.image_url || '';
-      productData.form = productData.form || '';
-      productData.package = productData.package || '';
-      productData.category = productData.category || categories[0]?.name || DEFAULT_CATEGORIES[0].name;
-
-      if (isEdit) {
-        await updateDoc(doc(db, 'products', productId!), productData);
-        alert('Đã cập nhật sản phẩm thành công!');
-      } else {
-        await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
-        alert('Đã thêm sản phẩm mới thành công!');
-      }
-      navigate('/admin');
-    } catch (err: any) {
-      if (err.code === 'permission-denied') {
-        alert('Lỗi: Không có quyền ghi dữ liệu! Kiểm tra Firestore Security Rules.');
-      } else {
-        alert(`Lỗi khi lưu sản phẩm: ${err.message || JSON.stringify(err)}`);
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <tr
+        key={product.id}
+        className="border-t border-gray-50 hover:bg-gray-50/30 transition-colors"
+        style={{
+          boxShadow: '0 1px 6px 0 rgba(0,0,0,0.06)',
+        }}
+      >
+        {showSortOrder && (
+          <td className="px-6 py-4 text-center">
+            <span className="text-xs font-bold text-gray-400">
+              {product.sort_order || 0}
+            </span>
+          </td>
+        )}
+        <td className="px-6 py-4">
+          <div className="flex items-center gap-4">
+            <div className="relative w-14 h-14 rounded-2xl overflow-hidden border border-gray-100 bg-white shadow-sm group shrink-0">
+              <img 
+                src={product.image_url || 'https://picsum.photos/seed/premium/200/200'} 
+                alt={product.name}
+                className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                referrerPolicy="no-referrer"
+              />
+              {product.is_hot && (
+                <div className="absolute top-0 right-0 bg-orange-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-bl-lg shadow-sm uppercase z-10">
+                  HOT 🔥
+                </div>
+              )}
+              {product.discount_percent && product.discount_percent > 0 && (
+                <div className="absolute top-0 left-0 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-br-lg shadow-sm uppercase z-10">
+                  -{product.discount_percent}%
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="font-bold text-gray-800 text-base leading-tight">{product.name}</span>
+              {/* Badge tình trạng hàng */}
+              {inStock ? (
+                <span className="inline-flex items-center gap-1 bg-green-50 text-green-600 border border-green-200 px-2 py-0.5 rounded-full text-[10px] font-bold w-fit">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
+                  Còn hàng
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 bg-red-50 text-red-500 border border-red-200 px-2 py-0.5 rounded-full text-[10px] font-bold w-fit">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>
+                  Hết hàng
+                </span>
+              )}
+            </div>
+          </div>
+        </td>
+        {showCategory && !groupByCategory && (
+          <td className="px-6 py-4">
+            <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-md">
+              {product.category}
+            </span>
+          </td>
+        )}
+        <td className="px-6 py-4">
+          {product.variants && product.variants.length > 0 ? (
+            <select 
+              value={selectedVariantIndices[product.id] ?? -1}
+              onChange={(e) => setSelectedVariantIndices({ ...selectedVariantIndices, [product.id]: Number(e.target.value) })}
+              className="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 focus:outline-none cursor-pointer"
+            >
+              <option value={-1}>{product.form}</option>
+              {product.variants.map((v, idx) => (
+                <option key={idx} value={idx}>{v.form}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-xs font-bold text-blue-500 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
+              {product.form}
+            </span>
+          )}
+        </td>
+        <td className="px-6 py-4">
+          <span className="text-xs font-bold text-purple-500 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-100">
+            {product.package}
+          </span>
+        </td>
+        <td className="px-6 py-4">
+          <div className="flex flex-col">
+            <span className="text-xl font-cute font-bold text-gray-900">
+              {(() => {
+                const variantIdx = selectedVariantIndices[product.id] ?? -1;
+                let price: number;
+                if (variantIdx === -1) {
+                  price = getPrice(product.price_public, product.price_ctv, product.price_ctvtime);
+                } else {
+                  const v = product.variants![variantIdx];
+                  price = getPrice(v.price_public, v.price_ctv, v.price_ctvtime);
+                }
+                return price.toLocaleString('vi-VN');
+              })()}đ
+            </span>
+            {isCTV && (
+              <span className="text-[9px] text-green-500 font-black uppercase tracking-tighter">Ưu đãi CTV</span>
+            )}
+          </div>
+        </td>
+        <td className="px-6 py-4">
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => handleOpenNotesModal(product)}
+              className="text-xs text-gray-500 hover:text-primary transition-colors leading-relaxed max-w-[180px] line-clamp-2 text-left font-medium hover:underline"
+              title={product.notes}
+            >
+              {product.notes}
+            </button>
+            {!isAdmin && (
+              <button 
+                onClick={() => handleBuyNow(product)}
+                disabled={!inStock}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 w-fit ${
+                  inStock
+                    ? 'bg-primary hover:bg-pink-600 text-white shadow-md shadow-primary/20'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {inStock ? <><span>🛒</span> Mua ngay</> : <><span>⏳</span> Hết hàng</>}
+              </button>
+            )}
+          </div>
+        </td>
+        {isAdmin && (
+          <td className="px-6 py-4 text-center">
+            <div className="flex items-center justify-center gap-2">
+              <button 
+                onClick={() => onEdit?.(product)}
+                className="w-9 h-9 flex items-center justify-center bg-yellow-50 text-yellow-600 rounded-xl hover:bg-yellow-100 transition-colors border border-yellow-100"
+                title="Sửa"
+              >
+                ✏️
+              </button>
+              <button 
+                onClick={() => onDelete?.(product.id)}
+                className="w-9 h-9 flex items-center justify-center bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+                title="Xóa"
+              >
+                🗑️
+              </button>
+            </div>
+          </td>
+        )}
+        {!isAdmin && <td className="px-6 py-4"></td>}
+      </tr>
+    );
+  };
+
+  // ---- RENDER MODAL CHÚ THÍCH SẢN PHẨM ----
+  const renderNotesModal = () => {
+    if (!showNotesModal || !selectedProductForModal) return null;
+
+    return (
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 animate-fade-in">
+        {/* Backdrop */}
+        <div 
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onClick={handleCloseNotesModal}
+        ></div>
+        
+        {/* Modal Content */}
+        <div className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-8 flex flex-col gap-6 animate-slide-up">
+          {/* Close Button */}
+          <button
+            onClick={handleCloseNotesModal}
+            className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-600 font-bold text-xl"
+          >
+            ✕
+          </button>
+
+          {/* Modal Header */}
+          <div className="pr-12">
+            <h2 className="text-2xl font-cute font-bold text-gray-800 mb-2">
+              {selectedProductForModal.name}
+            </h2>
+            <p className="text-sm text-gray-500">Thông tin chi tiết về sản phẩm</p>
+          </div>
+
+          {/* Product Image */}
+          {selectedProductForModal.image_url && (
+            <div className="w-full rounded-2xl overflow-hidden border border-gray-100 bg-gray-50">
+              <img
+                src={selectedProductForModal.image_url}
+                alt={selectedProductForModal.name}
+                className="w-full h-auto object-cover max-h-[300px]"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          )}
+
+          {/* Product Details */}
+          <div className="space-y-4">
+            {/* Hình thức */}
+            <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
+              <div className="text-2xl">📋</div>
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Hình thức</h3>
+                <p className="text-gray-900 font-bold text-base">{selectedProductForModal.form}</p>
+              </div>
+            </div>
+
+            {/* Gói */}
+            <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
+              <div className="text-2xl">📦</div>
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Gói</h3>
+                <p className="text-gray-900 font-bold text-base">{selectedProductForModal.package}</p>
+              </div>
+            </div>
+
+            {/* Danh mục */}
+            <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
+              <div className="text-2xl">🏷️</div>
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Danh mục</h3>
+                <p className="text-gray-900 font-bold text-base">{selectedProductForModal.category}</p>
+              </div>
+            </div>
+
+            {/* Giá */}
+            <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
+              <div className="text-2xl">💰</div>
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Giá</h3>
+                <div className="space-y-1">
+                  <p className="text-gray-900 font-bold text-lg">
+                    {selectedProductForModal.price_public.toLocaleString('vi-VN')}đ
+                    <span className="text-xs text-gray-500 ml-2">(Giá công khai)</span>
+                  </p>
+                  <p className="text-gray-900 font-bold text-lg">
+                    {selectedProductForModal.price_ctv.toLocaleString('vi-VN')}đ
+                    <span className="text-xs text-green-600 ml-2">(Giá CTV)</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Tình trạng hàng */}
+            <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
+              <div className="text-2xl">📊</div>
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Tình trạng</h3>
+                <p className={`font-bold text-base ${selectedProductForModal.in_stock !== false ? 'text-green-600' : 'text-red-600'}`}>
+                  {selectedProductForModal.in_stock !== false ? '✅ Còn hàng' : '❌ Hết hàng'}
+                </p>
+              </div>
+            </div>
+
+            {/* Chú thích / Mô tả */}
+            <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
+              <div className="text-2xl">📝</div>
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-1">Chú thích / Mô tả</h3>
+                <p className="text-gray-800 leading-relaxed whitespace-pre-wrap text-base">
+                  {selectedProductForModal.notes}
+                </p>
+              </div>
+            </div>
+
+            {/* Các biến thể (nếu có) */}
+            {selectedProductForModal.variants && selectedProductForModal.variants.length > 0 && (
+              <div className="flex items-start gap-4 pb-4 border-b border-gray-100">
+                <div className="text-2xl">🔄</div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-3">Các lựa chọn khác</h3>
+                  <div className="space-y-2">
+                    {selectedProductForModal.variants.map((variant, idx) => (
+                      <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <p className="font-bold text-gray-800 mb-1">{variant.form}</p>
+                        <div className="text-sm text-gray-600 space-y-0.5">
+                          <p>Giá công khai: <span className="font-bold text-gray-900">{variant.price_public.toLocaleString('vi-VN')}đ</span></p>
+                          <p>Giá CTV: <span className="font-bold text-green-600">{variant.price_ctv.toLocaleString('vi-VN')}đ</span></p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Close Button at Bottom */}
+          <button
+            onClick={handleCloseNotesModal}
+            className="w-full bg-primary hover:bg-pink-600 text-white py-3 rounded-2xl font-bold transition-all shadow-md shadow-primary/20 mt-4"
+          >
+            Đóng
+          </button>
+        </div>
       </div>
+    );
+  };
+
+  // ---- RENDER HEADER TABLE ----
+  const renderTableHeader = (hideCategory = false) => (
+    <thead>
+      <tr className="bg-gray-50/50 text-gray-500 font-cute text-sm uppercase tracking-wider">
+        {showSortOrder && <th className="px-6 py-4 font-bold text-center">STT</th>}
+        <th className="px-6 py-4 font-bold">Sản phẩm</th>
+        {showCategory && !hideCategory && <th className="px-6 py-4 font-bold">Danh mục</th>}
+        <th className="px-6 py-4 font-bold">Hình thức</th>
+        <th className="px-6 py-4 font-bold">Gói</th>
+        <th className="px-6 py-4 font-bold">Giá</th>
+        <th className="px-6 py-4 font-bold">Ghi chú</th>
+        {isAdmin && <th className="px-6 py-4 text-center font-bold">Thao tác</th>}
+        {!isAdmin && <th className="px-6 py-4"></th>}
+      </tr>
+    </thead>
+  );
+
+  // ---- CHẾ ĐỘ PHÂN NHÓM THEO DANH MỤC (dùng cho admin) ----
+  if (groupByCategory && isAdmin) {
+    // Nhóm sản phẩm theo danh mục
+    const grouped = products.reduce((acc, product) => {
+      const cat = product.category || 'Khác';
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(product);
+      return acc;
+    }, {} as Record<string, Product[]>);
+
+    // Sắp xếp danh mục theo thứ tự từ categories prop
+    const categoryNames = categories.map(c => c.name);
+    const sortedCategoryKeys = Object.keys(grouped).sort((a, b) => {
+      const idxA = categoryNames.indexOf(a);
+      const idxB = categoryNames.indexOf(b);
+      if (idxA === -1 && idxB === -1) return 0;
+      if (idxA === -1) return 1;
+      if (idxB === -1) return -1;
+      return idxA - idxB;
+    });
+
+    if (products.length === 0) {
+      return (
+        <div className="w-full bg-white rounded-3xl border border-gray-100 shadow-sm px-6 py-12 text-center text-gray-400 italic">
+          Chưa có sản phẩm nào được đăng...
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <div className="w-full space-y-8">
+          {sortedCategoryKeys.map((categoryName) => {
+            const catProducts = grouped[categoryName];
+            // Sắp xếp sản phẩm trong danh mục: is_hot lên đầu, sau đó theo sort_order
+            const sortedCatProducts = [...catProducts].sort((a: any, b: any) => {
+              if (b.is_hot === a.is_hot) return (a.sort_order || 0) - (b.sort_order || 0);
+              return b.is_hot ? 1 : -1;
+            });
+
+            // Lấy thông tin danh mục (icon, màu)
+            const catInfo = categories.find(c => c.name === categoryName);
+            const catColor = catInfo?.color || 'from-gray-400 to-gray-600';
+            const catIcon = catInfo?.icon || '📦';
+            const catDesc = catInfo?.desc || '';
+
+            return (
+              <div key={categoryName} className="w-full">
+                {/* Header danh mục */}
+                <div className="flex items-center gap-3 mb-3 px-1">
+                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${catColor} flex items-center justify-center text-white text-lg shadow-sm shrink-0`}>
+                    {catIcon}
+                  </div>
+                  <div>
+                    <h3 className="font-cute font-bold text-gray-800 text-lg leading-tight">{categoryName}</h3>
+                    {catDesc && (
+                      <p className="text-xs text-gray-400">{catDesc}</p>
+                    )}
+                  </div>
+                  <span className="ml-auto text-xs text-gray-300 font-mono">{catProducts.length} sản phẩm</span>
+                </div>
+
+                {/* Bảng sản phẩm trong danh mục */}
+                <div className="w-full overflow-x-auto bg-white rounded-3xl border border-gray-100 shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    {renderTableHeader(true)}
+                    <tbody className="font-body">
+                      {sortedCatProducts.map((product) => renderProductRow(product))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {renderNotesModal()}
+      </>
     );
   }
 
+  // ---- CHẾ ĐỘ BÌNH THƯỜNG (không phân nhóm) ----
   return (
-    <div className="min-h-screen bg-gray-50/50 py-10 px-4 animate-fade-in">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <button
-            type="button"
-            onClick={() => navigate('/admin')}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white rounded-2xl shadow-sm border border-gray-100 text-gray-600 font-bold hover:text-primary hover:border-primary transition-all group"
-          >
-            <span className="group-hover:-translate-x-1 transition-transform">⬅️</span> Quay lại
-          </button>
-          <h2 className="text-2xl font-cute font-bold text-gray-800">
-            {isEdit ? '✏️ Sửa sản phẩm' : '➕ Thêm sản phẩm mới'}
-          </h2>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-[40px] shadow-xl border border-gray-100 p-8 space-y-6">
-
-          {/* Danh mục */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Danh mục</label>
-            <select
-              required
-              value={form.category || ''}
-              onChange={(e) => setForm(prev => ({ ...prev, category: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all bg-white"
-            >
-              <option value="">-- Chọn danh mục --</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.name}>{cat.icon} {cat.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Tên sản phẩm */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Tên sản phẩm</label>
-            <input
-              required
-              type="text"
-              value={form.name || ''}
-              onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-            />
-          </div>
-
-          {/* Ảnh sản phẩm */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Ảnh sản phẩm</label>
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-pink-200 flex items-center justify-center overflow-hidden bg-pink-50 shrink-0">
-                {form.image_url ? (
-                  <img src={form.image_url} alt="Preview" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-2xl text-pink-300">🖼️</span>
-                )}
-              </div>
-              <div className="flex-1 w-full space-y-2">
-                <label className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm cursor-pointer transition-all border-2 ${uploading ? 'bg-gray-100 border-gray-200 text-gray-400' : 'bg-white border-pink-100 text-primary hover:bg-pink-50'}`}>
-                  {uploading ? '⏳ Đang tải...' : '📤 Tải ảnh lên'}
-                  <input type="file" accept="image/*" onChange={handleUploadImage} disabled={uploading} className="hidden" />
-                </label>
-                <input
-                  type="text"
-                  value={form.image_url || ''}
-                  onChange={(e) => setForm(prev => ({ ...prev, image_url: e.target.value }))}
-                  placeholder="Hoặc dán link ảnh vào đây..."
-                  className="w-full px-4 py-2 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none text-xs"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Hình thức + Gói */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Hình thức</label>
-              <input
-                required
-                type="text"
-                value={form.form || ''}
-                onChange={(e) => setForm(prev => ({ ...prev, form: e.target.value }))}
-                placeholder="Gia hạn / Tạo mới"
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Gói</label>
-              <input
-                required
-                type="text"
-                value={form.package || ''}
-                onChange={(e) => setForm(prev => ({ ...prev, package: e.target.value }))}
-                placeholder="1 Tháng / 1 Năm"
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Giá Public + Giá CTV chung */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Giá Public (đ)</label>
-              <input
-                required
-                type="number"
-                value={form.price_public ?? ''}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setForm(prev => ({ ...prev, price_public: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Giá CTV chung (đ)</label>
-              <input
-                required
-                type="number"
-                value={form.price_ctv ?? ''}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setForm(prev => ({ ...prev, price_ctv: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Giá riêng cho CTV ctvtime */}
-          <div className="bg-amber-50 border-2 border-amber-100 rounded-2xl p-4 space-y-2">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-amber-500">⭐</span>
-              <label className="block text-sm font-bold text-amber-700">
-                Giá riêng cho CTV <span className="font-black">ctvtime</span> (đ) — Tùy chọn
-              </label>
-            </div>
-            <p className="text-xs text-amber-600 mb-2">
-              Nếu để trống hoặc nhập 0, CTV ctvtime sẽ thấy giá CTV chung ở trên.
-            </p>
-            <input
-              type="number"
-              min="0"
-              value={form.price_ctvtime ?? ''}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) => setForm(prev => ({ 
-                ...prev, 
-                price_ctvtime: e.target.value === '' ? undefined : Number(e.target.value) 
-              }))}
-              placeholder="Nhập giá riêng cho ctvtime (để trống = dùng giá CTV chung)"
-              className="w-full px-4 py-3 rounded-xl border-2 border-amber-200 focus:border-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-100 transition-all bg-white"
-            />
-          </div>
-
-          {/* Giảm giá + Thứ tự */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Giảm giá (%)</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={form.discount_percent ?? ''}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setForm(prev => ({ ...prev, discount_percent: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                placeholder="Ví dụ: 20"
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Thứ tự ưu tiên</label>
-              <input
-                type="number"
-                value={form.sort_order ?? ''}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setForm(prev => ({ ...prev, sort_order: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Is Hot + In Stock */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex items-center gap-3 bg-pink-50/50 p-4 rounded-2xl border-2 border-pink-50">
-              <input
-                type="checkbox"
-                id="is_hot"
-                checked={form.is_hot || false}
-                onChange={(e) => setForm(prev => ({ ...prev, is_hot: e.target.checked }))}
-                className="w-5 h-5 accent-primary cursor-pointer"
-              />
-              <label htmlFor="is_hot" className="text-sm font-bold text-gray-700 cursor-pointer">
-                🔥 Đánh dấu là sản phẩm HOT (Đưa lên đầu danh sách)
-              </label>
-            </div>
-            <div className="flex items-center gap-3 bg-green-50/50 p-4 rounded-2xl border-2 border-green-50">
-              <input
-                type="checkbox"
-                id="in_stock"
-                checked={form.in_stock !== false}
-                onChange={(e) => setForm(prev => ({ ...prev, in_stock: e.target.checked }))}
-                className="w-5 h-5 accent-green-500 cursor-pointer"
-              />
-              <label htmlFor="in_stock" className="text-sm font-bold text-gray-700 cursor-pointer">
-                ✅ Còn hàng (bỏ chọn = Hết hàng)
-              </label>
-            </div>
-          </div>
-
-          {/* Ghi chú */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Ghi chú</label>
-            <textarea
-              value={form.notes || ''}
-              onChange={(e) => setForm(prev => ({ ...prev, notes: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              rows={3}
-            />
-          </div>
-
-          {/* Variants */}
-          <div className="border-t-2 border-pink-50 pt-6">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="font-cute font-bold text-lg text-primary">💎 Các hình thức khác (Tùy chọn)</h4>
-              <button
-                type="button"
-                onClick={addVariant}
-                className="text-xs bg-secondary text-white px-3 py-1.5 rounded-lg font-bold hover:bg-blue-600 transition-all"
-              >
-                + Thêm hình thức
-              </button>
-            </div>
-            <div className="space-y-4">
-              {(form.variants || []).map((variant, index) => (
-                <div key={index} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 relative group">
-                  <button
-                    type="button"
-                    onClick={() => removeVariant(index)}
-                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    ✕
-                  </button>
-                  {/* Hàng 1: Hình thức + Giá Public + Giá CTV chung */}
-                  <div className="grid grid-cols-3 gap-4 mb-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Hình thức</label>
-                      <input
-                        type="text"
-                        value={variant.form}
-                        onChange={(e) => updateVariant(index, 'form', e.target.value)}
-                        placeholder="Ví dụ: Acc Cấp"
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-primary focus:outline-none text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Giá Public</label>
-                      <input
-                        type="number"
-                        value={variant.price_public ?? ''}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => updateVariant(index, 'price_public', e.target.value === '' ? 0 : Number(e.target.value))}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-primary focus:outline-none text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Giá CTV chung</label>
-                      <input
-                        type="number"
-                        value={variant.price_ctv ?? ''}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => updateVariant(index, 'price_ctv', e.target.value === '' ? 0 : Number(e.target.value))}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-primary focus:outline-none text-sm"
-                      />
-                    </div>
-                  </div>
-                  {/* Hàng 2: Giá riêng ctvtime */}
-                  <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
-                    <label className="block text-[10px] font-bold text-amber-600 uppercase mb-1">
-                      ⭐ Giá riêng ctvtime (để trống = dùng giá CTV chung)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={variant.price_ctvtime ?? ''}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => updateVariant(index, 'price_ctvtime', e.target.value === '' ? undefined : Number(e.target.value))}
-                      placeholder="Để trống nếu không có giá riêng"
-                      className="w-full px-3 py-2 rounded-lg border border-amber-200 focus:border-amber-400 focus:outline-none text-sm bg-white"
-                    />
-                  </div>
-                </div>
-              ))}
-              {(form.variants || []).length === 0 && (
-                <p className="text-center text-gray-400 text-xs italic py-4">Chưa có hình thức bổ sung nào.</p>
-              )}
-            </div>
-          </div>
-
-          {/* Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t-2 border-pink-50">
-            <button
-              type="button"
-              onClick={() => navigate('/admin')}
-              className="px-6 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-100 transition-all border-2 border-transparent"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={saving || uploading}
-              className="bg-primary hover:bg-pink-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 transition-all disabled:bg-gray-300 flex items-center gap-2"
-            >
-              {saving ? (
-                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Đang lưu...</>
-              ) : (
-                isEdit ? '✅ Cập nhật sản phẩm' : '➕ Thêm sản phẩm'
-              )}
-            </button>
-          </div>
-        </form>
+    <>
+      <div className="w-full overflow-x-auto bg-white rounded-3xl border border-gray-100 shadow-sm">
+        <table className="w-full text-left border-collapse">
+          {renderTableHeader()}
+          <tbody className="font-body">
+            {products.length === 0 ? (
+              <tr>
+                <td colSpan={isAdmin ? (showCategory ? 8 : 7) : (showCategory ? 7 : 6)} className="px-6 py-12 text-center text-gray-400 italic">
+                  Chưa có sản phẩm nào được đăng...
+                </td>
+              </tr>
+            ) : (
+              products.map((product) => renderProductRow(product))
+            )}
+          </tbody>
+        </table>
       </div>
-    </div>
+      {renderNotesModal()}
+    </>
   );
 };
 
-export default ProductFormPage;
+export default ProductTable;
