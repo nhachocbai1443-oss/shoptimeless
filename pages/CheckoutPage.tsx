@@ -139,7 +139,14 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
         email: formData.email,
         notes: formData.notes,
         paymentMethod: selectedMethod?.name || formData.paymentMethod,
-        accountInfo: accountInfo
+        accountInfo: accountInfo,
+        // ⭐ TRUYỀN THÔNG TIN CHUYỂN KHOẢN TỪ PHƯƠNG THỨC THANH TOÁN ĐÃ CHỌN
+        paymentDetails: selectedMethod ? {
+          bankName: selectedMethod.bank_name || '',
+          accountName: selectedMethod.account_name || '',
+          accountNo: selectedMethod.account_no || '',
+          transferContent: qrData.content || `DH${docRef.id.slice(-6).toUpperCase()}`
+        } : undefined
       }).catch(err => console.error('Notification error (non-blocking):', err));
 
       setShowSuccessPopup(true);
