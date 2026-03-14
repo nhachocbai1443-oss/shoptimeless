@@ -2,16 +2,7 @@
  * notifications.ts
  * Xử lý gửi thông báo khi có đơn hàng mới:
  * - Telegram Bot: Gửi tin nhắn tới chat của bạn
- * - Email (qua EmailJS hoặc Formspree): Gửi email thông báo
- *
- * Cách cấu hình:
- * 1. Tạo file .env.local và điền các biến sau:
- *    VITE_TELEGRAM_BOT_TOKEN=your_bot_token
- *    VITE_TELEGRAM_CHAT_ID=your_chat_id
- *    VITE_EMAILJS_SERVICE_ID=your_service_id
- *    VITE_EMAILJS_TEMPLATE_ID=your_template_id
- *    VITE_EMAILJS_PUBLIC_KEY=your_public_key
- *    VITE_NOTIFY_EMAILS=email1@gmail.com,email2@gmail.com
+ * - Email (qua EmailJS): Gửi email thông báo
  */
 
 export interface OrderNotificationData {
@@ -26,7 +17,7 @@ export interface OrderNotificationData {
   notes: string;
   paymentMethod: string;
   accountInfo?: string | null;
-  // Thêm thông tin chuyển khoản
+  // ⭐ THÊM THÔNG TIN CHUYỂN KHOẢN
   paymentDetails?: {
     accountName: string;
     bankName: string;
@@ -37,12 +28,6 @@ export interface OrderNotificationData {
 
 // ============================================================
 // TELEGRAM NOTIFICATION
-// Hướng dẫn lấy Bot Token và Chat ID:
-// 1. Nhắn tin @BotFather trên Telegram, gõ /newbot để tạo bot
-// 2. BotFather sẽ cho bạn TOKEN
-// 3. Nhắn tin bot của bạn, sau đó truy cập:
-//    https://api.telegram.org/bot<TOKEN>/getUpdates
-//    để lấy chat_id
 // ============================================================
 export const sendTelegramNotification = async (order: OrderNotificationData): Promise<void> => {
   const botToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
@@ -103,18 +88,13 @@ ${order.paymentDetails ? `
 };
 
 // ============================================================
-// EMAIL NOTIFICATION (dùng EmailJS - miễn phí, không cần backend)
-// Hướng dẫn:
-// 1. Đăng ký tại https://www.emailjs.com/ (miễn phí 200 email/tháng)
-// 2. Tạo Email Service (kết nối Gmail của bạn)
-// 3. Tạo Email Template với các biến: {{to_email}}, {{order_id}}, v.v.
-// 4. Lấy Service ID, Template ID, Public Key từ dashboard
+// EMAIL NOTIFICATION (dùng EmailJS)
 // ============================================================
 export const sendEmailNotification = async (order: OrderNotificationData): Promise<void> => {
   const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
   const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
   const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
-  const notifyEmails = import.meta.env.VITE_NOTIFY_EMAILS; // "email1@gmail.com,email2@gmail.com"
+  const notifyEmails = import.meta.env.VITE_NOTIFY_EMAILS;
 
   if (!serviceId || !templateId || !publicKey) {
     console.warn('EmailJS chưa được cấu hình. Thêm VITE_EMAILJS_* vào .env.local');
@@ -127,6 +107,7 @@ export const sendEmailNotification = async (order: OrderNotificationData): Promi
     return;
   }
 
+  // ⭐ THÊM CÁC BIẾN CHUYỂN KHOẢN
   const templateParams = {
     order_id: order.orderId,
     product_name: order.productName,
@@ -140,14 +121,13 @@ export const sendEmailNotification = async (order: OrderNotificationData): Promi
     account_info: order.accountInfo || 'N/A',
     notes: order.notes || 'Không có',
     order_time: new Date().toLocaleString('vi-VN'),
-    // Thêm thông tin chuyển khoản
+    // ⭐ THÔNG TIN CHUYỂN KHOẢN
     bank_name: order.paymentDetails?.bankName || 'N/A',
     account_name: order.paymentDetails?.accountName || 'N/A',
     account_no: order.paymentDetails?.accountNo || 'N/A',
     transfer_content: order.paymentDetails?.transferContent || 'N/A',
   };
 
-  // Gửi email tới từng địa chỉ trong danh sách
   for (const toEmail of emailList) {
     try {
       const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
@@ -179,7 +159,6 @@ export const sendEmailNotification = async (order: OrderNotificationData): Promi
 // HÀM TỔNG HỢP: Gửi tất cả thông báo cùng lúc
 // ============================================================
 export const sendAllNotifications = async (order: OrderNotificationData): Promise<void> => {
-  // Chạy song song để nhanh hơn
   await Promise.allSettled([
     sendTelegramNotification(order),
     sendEmailNotification(order)
