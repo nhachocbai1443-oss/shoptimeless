@@ -77,7 +77,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full shadow-lg flex items-center justify-center text-white text-2xl hover:scale-110 transition-transform border-2 border-white"
           title="Messenger"
         >
-          💬
+          <img src="https://upload.wikimedia.org/wikipedia/commons/b/be/Facebook_Messenger_logo_2020.svg" alt="Messenger" className="w-8 h-8" />
         </a>
         <a 
           href="https://zalo.me/0528173022" 
@@ -95,7 +95,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           className="w-14 h-14 bg-[#229ED9] rounded-full shadow-lg flex items-center justify-center text-white text-2xl hover:scale-110 transition-transform border-2 border-white"
           title="Telegram"
         >
-          ✈️
+         <img src="https://upload.wikimedia.org/wikipedia/commons/6/62/Telegram_logo_icon.svg" alt="Telegram" className="w-8 h-8" />
         </a>
       </div>
 
