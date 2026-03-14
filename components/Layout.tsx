@@ -95,7 +95,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           className="w-14 h-14 bg-[#229ED9] rounded-full shadow-lg flex items-center justify-center text-white text-2xl hover:scale-110 transition-transform border-2 border-white"
           title="Telegram"
         >
-         <img src="https://upload.wikimedia.org/wikipedia/commons/6/62/Telegram_logo_icon.svg" alt="Telegram" className="w-8 h-8" />
+         <img src="https://upload.wikimedia.org/wikipedia/commons/5/5a/Telegram_2019_simple_logo.svg" alt="Telegram" className="w-8 h-8" />
         </a>
       </div>
 
