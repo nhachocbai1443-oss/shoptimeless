@@ -33,7 +33,6 @@ const ProductTable: React.FC<ProductTableProps> = ({
     navigate(`/checkout/${product.id}`);
   };
 
-  // Chuyển sang trang ghi chú
   const handleViewNotes = (product: Product) => {
     navigate(`/product-notes/${product.id}`);
   };
@@ -52,7 +51,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
     return price_public;
   };
 
-  const renderProductRow = (product: Product, rankInCategory?: number) => {
+  const renderProductRow = (product: Product, showNotes: boolean) => {
     const inStock = product.in_stock !== false;
 
     return (
@@ -156,23 +155,23 @@ const ProductTable: React.FC<ProductTableProps> = ({
             )}
           </div>
         </td>
-        {/* CỘT GHI CHÚ - NHẤN VÀO ĐI TRANG MỚI */}
-        <td className="px-6 py-4 min-w-[200px] max-w-[300px]">
-          {product.notes ? (
-            <button
-              onClick={() => handleViewNotes(product)}
-              className="text-sm text-gray-700 hover:text-primary transition-colors text-left font-medium cursor-pointer bg-gray-50 hover:bg-gray-100 p-3 rounded-lg w-full"
-              title="Nhấn để xem đầy đủ"
-            >
-              <span className="block overflow-hidden" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                {product.notes}
-              </span>
-              <span className="text-xs text-primary font-bold mt-1 block">Xem thêm →</span>
-            </button>
-          ) : (
-            <span className="text-xs text-gray-300 italic">Không có ghi chú</span>
-          )}
-        </td>
+        {/* CỘT GHI CHÚ - chỉ render khi showNotes = true */}
+        {showNotes && (
+          <td className="px-4 py-4 max-w-[220px]">
+            {product.notes ? (
+              <button
+                onClick={() => handleViewNotes(product)}
+                className="text-sm text-gray-700 hover:text-primary transition-colors text-left font-medium cursor-pointer bg-gray-50 hover:bg-gray-100 p-3 rounded-lg w-full"
+                title="Nhấn để xem đầy đủ"
+              >
+                <span className="block overflow-hidden" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  {product.notes}
+                </span>
+                <span className="text-xs text-primary font-bold mt-1 block">Xem thêm →</span>
+              </button>
+            ) : null}
+          </td>
+        )}
         {/* CỘT NÚT MUA NGAY */}
         <td className="px-6 py-4">
           {!isAdmin && (
@@ -213,7 +212,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
     );
   };
 
-  const renderTableHeader = (hideCategory = false) => (
+  const renderTableHeader = (showNotes: boolean, hideCategory = false) => (
     <thead>
       <tr className="bg-gray-50/50 text-gray-500 font-cute text-sm uppercase tracking-wider">
         {showSortOrder && <th className="px-6 py-4 font-bold text-center">STT</th>}
@@ -222,7 +221,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
         <th className="px-6 py-4 font-bold">Hình thức</th>
         <th className="px-6 py-4 font-bold">Gói</th>
         <th className="px-6 py-4 font-bold">Giá</th>
-        <th className="px-6 py-4 font-bold">Ghi chú</th>
+        {showNotes && <th className="px-6 py-4 font-bold">Ghi chú</th>}
         <th className="px-6 py-4 font-bold">Hành động</th>
         {isAdmin && <th className="px-6 py-4 text-center font-bold">Thao tác</th>}
       </tr>
@@ -264,6 +263,9 @@ const ProductTable: React.FC<ProductTableProps> = ({
             return b.is_hot ? 1 : -1;
           });
 
+          // Chỉ hiện cột ghi chú nếu ít nhất 1 sản phẩm trong nhóm có ghi chú
+          const hasNotes = sortedCatProducts.some(p => p.notes && p.notes.trim() !== '');
+
           const catInfo = categories.find(c => c.name === categoryName);
           const catColor = catInfo?.color || 'from-gray-400 to-gray-600';
           const catIcon = catInfo?.icon || '📦';
@@ -286,9 +288,9 @@ const ProductTable: React.FC<ProductTableProps> = ({
 
               <div className="w-full overflow-x-auto bg-white rounded-3xl border border-gray-100 shadow-sm">
                 <table className="w-full text-left border-collapse">
-                  {renderTableHeader(true)}
+                  {renderTableHeader(hasNotes, true)}
                   <tbody className="font-body">
-                    {sortedCatProducts.map((product) => renderProductRow(product))}
+                    {sortedCatProducts.map((product) => renderProductRow(product, hasNotes))}
                   </tbody>
                 </table>
               </div>
@@ -299,10 +301,13 @@ const ProductTable: React.FC<ProductTableProps> = ({
     );
   }
 
+  // Chỉ hiện cột ghi chú nếu ít nhất 1 sản phẩm có ghi chú
+  const hasNotes = products.some(p => p.notes && p.notes.trim() !== '');
+
   return (
     <div className="w-full overflow-x-auto bg-white rounded-3xl border border-gray-100 shadow-sm">
       <table className="w-full text-left border-collapse">
-        {renderTableHeader()}
+        {renderTableHeader(hasNotes)}
         <tbody className="font-body">
           {products.length === 0 ? (
             <tr>
@@ -311,7 +316,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
               </td>
             </tr>
           ) : (
-            products.map((product) => renderProductRow(product))
+            products.map((product) => renderProductRow(product, hasNotes))
           )}
         </tbody>
       </table>
