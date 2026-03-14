@@ -128,6 +128,7 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
       const docRef = await addDoc(collection(db, 'orders'), orderData);
 
       // Gửi thông báo Telegram và Email (chạy nền, không chặn UI)
+      const qrData = generateVietQR();
       sendAllNotifications({
         orderId: docRef.id,
         productName: product.name,
@@ -139,7 +140,14 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
         email: formData.email,
         notes: formData.notes,
         paymentMethod: selectedMethod?.name || formData.paymentMethod,
-        accountInfo: accountInfo
+        accountInfo: accountInfo,
+        // Thêm thông tin chuyển khoản
+        paymentDetails: selectedMethod ? {
+          accountName: selectedMethod.account_name,
+          bankName: selectedMethod.bank_name,
+          accountNo: selectedMethod.account_no,
+          transferContent: `KTK${Math.floor(10000 + Math.random() * 90000)}`
+        } : undefined
       }).catch(err => console.error('Notification error (non-blocking):', err));
 
       setShowSuccessPopup(true);
