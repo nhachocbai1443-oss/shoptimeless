@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, doc, getDoc, addDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, addDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { uploadImageToSupabase } from '../supabase';
 import { Product, User, Category } from '../types';
 
@@ -186,6 +186,20 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
     setForm(prev => ({ ...prev, variants: v }));
   };
 
+  // Hàm thử làm mới session khi gặp lỗi permission-denied
+  const tryRefreshSession = async (): Promise<boolean> => {
+    try {
+      const saved = localStorage.getItem('studytimeless_user');
+      if (!saved) return false;
+      const savedUser: User = JSON.parse(saved);
+      const q = query(collection(db, 'users'), where('username', '==', savedUser.username));
+      const snap = await getDocs(q);
+      return !snap.empty;
+    } catch {
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name) { alert('Vui lòng nhập tên sản phẩm!'); return; }
@@ -232,7 +246,57 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
       navigate('/admin');
     } catch (err: any) {
       if (err.code === 'permission-denied') {
-        alert('Lỗi: Không có quyền ghi dữ liệu! Kiểm tra Firestore Security Rules.');
+        // Thử làm mới session rồi lưu lại
+        const refreshed = await tryRefreshSession();
+        if (refreshed) {
+          // Thử lưu lại lần 2 sau khi session được làm mới
+          try {
+            const { id, ...productData } = form as any;
+            if (!productData.variants || !Array.isArray(productData.variants)) productData.variants = [];
+            productData.variants = productData.variants.filter((v: any) => v.form && v.form.trim() !== '');
+            productData.variants = productData.variants.map((v: any) => {
+              const cleaned: any = {
+                form: v.form,
+                price_public: Number(v.price_public) || 0,
+                price_ctv: Number(v.price_ctv) || 0,
+              };
+              if (v.price_ctvtime !== undefined && v.price_ctvtime !== null && v.price_ctvtime !== '' && Number(v.price_ctvtime) > 0) {
+                cleaned.price_ctvtime = Number(v.price_ctvtime);
+              }
+              return cleaned;
+            });
+            productData.price_public = Number(productData.price_public) || 0;
+            productData.price_ctv = Number(productData.price_ctv) || 0;
+            if (productData.price_ctvtime !== undefined && productData.price_ctvtime !== null && productData.price_ctvtime !== '' && Number(productData.price_ctvtime) > 0) {
+              productData.price_ctvtime = Number(productData.price_ctvtime);
+            } else {
+              delete productData.price_ctvtime;
+            }
+            productData.discount_percent = Number(productData.discount_percent) || 0;
+            productData.sort_order = Number(productData.sort_order) || 0;
+            productData.is_hot = Boolean(productData.is_hot);
+            productData.in_stock = productData.in_stock !== undefined ? Boolean(productData.in_stock) : true;
+            productData.notes = productData.notes || '';
+            productData.image_url = productData.image_url || '';
+            productData.form = productData.form || '';
+            productData.package = productData.package || '';
+            productData.category = productData.category || categories[0]?.name || DEFAULT_CATEGORIES[0].name;
+
+            if (isEdit) {
+              await updateDoc(doc(db, 'products', productId!), productData);
+              alert('Đã cập nhật sản phẩm thành công!');
+            } else {
+              await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
+              alert('Đã thêm sản phẩm mới thành công!');
+            }
+            navigate('/admin');
+            return;
+          } catch (retryErr: any) {
+            alert(`Lỗi khi lưu sản phẩm: ${retryErr.message || JSON.stringify(retryErr)}`);
+          }
+        } else {
+          alert('Phiên đăng nhập đã hết hạn. Vui lòng đăng xuất và đăng nhập lại!');
+        }
       } else {
         alert(`Lỗi khi lưu sản phẩm: ${err.message || JSON.stringify(err)}`);
       }
@@ -271,14 +335,12 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
 
           {/* Danh mục */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Danh mục</label>
+            <label className="block text-gray-700 font-bold mb-2 text-sm">📂 Danh mục</label>
             <select
-              required
               value={form.category || ''}
-              onChange={(e) => setForm(prev => ({ ...prev, category: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all bg-white"
+              onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))}
+              className="w-full px-4 py-3 rounded-2xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
             >
-              <option value="">-- Chọn danh mục --</option>
               {categories.map(cat => (
                 <option key={cat.id} value={cat.name}>{cat.icon} {cat.name}</option>
               ))}
@@ -287,216 +349,184 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
 
           {/* Tên sản phẩm */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Tên sản phẩm</label>
+            <label className="block text-gray-700 font-bold mb-2 text-sm">🏷️ Tên sản phẩm <span className="text-red-400">*</span></label>
             <input
-              required
               type="text"
               value={form.name || ''}
-              onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
+              onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="Ví dụ: Canva Pro, ChatGPT Plus..."
+              className="w-full px-4 py-3 rounded-2xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
+              required
             />
           </div>
 
           {/* Ảnh sản phẩm */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Ảnh sản phẩm</label>
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-pink-200 flex items-center justify-center overflow-hidden bg-pink-50 shrink-0">
-                {form.image_url ? (
-                  <img src={form.image_url} alt="Preview" className="w-full h-full object-cover" />
+            <label className="block text-gray-700 font-bold mb-2 text-sm">🖼️ Ảnh sản phẩm</label>
+            <div className="flex items-center gap-4">
+              {form.image_url && (
+                <img src={form.image_url} alt="preview" className="w-16 h-16 rounded-2xl object-cover border-2 border-pink-100 shadow" />
+              )}
+              <label className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-sm cursor-pointer transition-all shadow-sm ${uploading ? 'bg-gray-100 text-gray-400' : 'bg-pink-50 text-primary hover:bg-pink-100'}`}>
+                {uploading ? (
+                  <><div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div> Đang tải...</>
                 ) : (
-                  <span className="text-2xl text-pink-300">🖼️</span>
+                  <><span>📤</span> Chọn ảnh</>
                 )}
-              </div>
-              <div className="flex-1 w-full space-y-2">
-                <label className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm cursor-pointer transition-all border-2 ${uploading ? 'bg-gray-100 border-gray-200 text-gray-400' : 'bg-white border-pink-100 text-primary hover:bg-pink-50'}`}>
-                  {uploading ? '⏳ Đang tải...' : '📤 Tải ảnh lên'}
-                  <input type="file" accept="image/*" onChange={handleUploadImage} disabled={uploading} className="hidden" />
-                </label>
+                <input type="file" accept="image/*" onChange={handleUploadImage} className="hidden" disabled={uploading} />
+              </label>
+              {form.image_url && (
+                <button type="button" onClick={() => setForm(prev => ({ ...prev, image_url: '' }))} className="text-xs text-red-400 hover:text-red-600 font-bold">✕ Xóa ảnh</button>
+              )}
+            </div>
+            <div className="mt-2">
+              <label className="block text-xs text-gray-400 mb-1">Hoặc nhập URL ảnh:</label>
+              <input
+                type="text"
+                value={form.image_url || ''}
+                onChange={e => setForm(prev => ({ ...prev, image_url: e.target.value }))}
+                placeholder="https://..."
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-primary focus:outline-none text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Hình thức & Gói */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 font-bold mb-2 text-sm">📋 Hình thức mặc định</label>
+              <input
+                type="text"
+                value={form.form || ''}
+                onChange={e => setForm(prev => ({ ...prev, form: e.target.value }))}
+                placeholder="Ví dụ: Tài khoản riêng"
+                className="w-full px-4 py-3 rounded-2xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 font-bold mb-2 text-sm">📦 Gói</label>
+              <input
+                type="text"
+                value={form.package || ''}
+                onChange={e => setForm(prev => ({ ...prev, package: e.target.value }))}
+                placeholder="Ví dụ: 1 tháng, 1 năm..."
+                className="w-full px-4 py-3 rounded-2xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Giá */}
+          <div className="bg-pink-50/50 rounded-3xl p-5 space-y-4">
+            <h4 className="font-cute font-bold text-primary text-lg">💰 Giá mặc định</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-gray-700 font-bold mb-2 text-sm">Giá Public (VND)</label>
                 <input
-                  type="text"
-                  value={form.image_url || ''}
-                  onChange={(e) => setForm(prev => ({ ...prev, image_url: e.target.value }))}
-                  placeholder="Hoặc dán link ảnh vào đây..."
-                  className="w-full px-4 py-2 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none text-xs"
+                  type="number"
+                  min="0"
+                  value={form.price_public ?? ''}
+                  onFocus={(e) => e.target.select()}
+                  onChange={e => setForm(prev => ({ ...prev, price_public: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-pink-100 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-bold mb-2 text-sm">Giá CTV chung (VND)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.price_ctv ?? ''}
+                  onFocus={(e) => e.target.select()}
+                  onChange={e => setForm(prev => ({ ...prev, price_ctv: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-pink-100 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
                 />
               </div>
             </div>
-          </div>
-
-          {/* Hình thức + Gói */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Hình thức</label>
-              <input
-                required
-                type="text"
-                value={form.form || ''}
-                onChange={(e) => setForm(prev => ({ ...prev, form: e.target.value }))}
-                placeholder="Gia hạn / Tạo mới"
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Gói</label>
-              <input
-                required
-                type="text"
-                value={form.package || ''}
-                onChange={(e) => setForm(prev => ({ ...prev, package: e.target.value }))}
-                placeholder="1 Tháng / 1 Năm"
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Giá Public + Giá CTV chung */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Giá Public (đ)</label>
-              <input
-                required
-                type="number"
-                value={form.price_public ?? ''}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setForm(prev => ({ ...prev, price_public: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Giá CTV chung (đ)</label>
-              <input
-                required
-                type="number"
-                value={form.price_ctv ?? ''}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setForm(prev => ({ ...prev, price_ctv: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Giá riêng cho CTV ctvtime */}
-          <div className="bg-amber-50 border-2 border-amber-100 rounded-2xl p-4 space-y-2">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-amber-500">⭐</span>
-              <label className="block text-sm font-bold text-amber-700">
-                Giá riêng cho CTV <span className="font-black">ctvtime</span> (đ) — Tùy chọn
+            {/* Giá riêng ctvtime */}
+            <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
+              <label className="block text-amber-700 font-bold mb-2 text-sm">
+                ⭐ Giá riêng ctvtime (để trống = dùng giá CTV chung)
               </label>
+              <input
+                type="number"
+                min="0"
+                value={form.price_ctvtime ?? ''}
+                onFocus={(e) => e.target.select()}
+                onChange={e => setForm(prev => ({ ...prev, price_ctvtime: e.target.value === '' ? undefined : Number(e.target.value) }))}
+                placeholder="Để trống nếu không có giá riêng"
+                className="w-full px-4 py-3 rounded-2xl border-2 border-amber-200 focus:border-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-100 transition-all font-medium bg-white"
+              />
             </div>
-            <p className="text-xs text-amber-600 mb-2">
-              Nếu để trống hoặc nhập 0, CTV ctvtime sẽ thấy giá CTV chung ở trên.
-            </p>
-            <input
-              type="number"
-              min="0"
-              value={form.price_ctvtime ?? ''}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) => setForm(prev => ({
-                ...prev,
-                price_ctvtime: e.target.value === '' ? undefined : Number(e.target.value)
-              }))}
-              placeholder="Nhập giá riêng cho ctvtime (để trống = dùng giá CTV chung)"
-              className="w-full px-4 py-3 rounded-xl border-2 border-amber-200 focus:border-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-100 transition-all bg-white"
-            />
           </div>
 
-          {/* Giảm giá + Thứ tự */}
+          {/* Giảm giá & Sort */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Giảm giá (%)</label>
+              <label className="block text-gray-700 font-bold mb-2 text-sm">🏷️ Giảm giá (%)</label>
               <input
                 type="number"
                 min="0"
                 max="100"
                 value={form.discount_percent ?? ''}
                 onFocus={(e) => e.target.select()}
-                onChange={(e) => setForm(prev => ({ ...prev, discount_percent: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                placeholder="Ví dụ: 20"
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
+                onChange={e => setForm(prev => ({ ...prev, discount_percent: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                className="w-full px-4 py-3 rounded-2xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
               />
             </div>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Thứ tự ưu tiên</label>
+              <label className="block text-gray-700 font-bold mb-2 text-sm">🔢 Thứ tự (nhỏ = lên đầu)</label>
               <input
                 type="number"
                 value={form.sort_order ?? ''}
                 onFocus={(e) => e.target.select()}
-                onChange={(e) => setForm(prev => ({ ...prev, sort_order: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                className="w-full px-4 py-3 rounded-xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all"
+                onChange={e => setForm(prev => ({ ...prev, sort_order: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                className="w-full px-4 py-3 rounded-2xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
               />
             </div>
           </div>
 
-          {/* Is Hot + In Stock */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex items-center gap-3 bg-pink-50/50 p-4 rounded-2xl border-2 border-pink-50">
-              <input
-                type="checkbox"
-                id="is_hot"
-                checked={form.is_hot || false}
-                onChange={(e) => setForm(prev => ({ ...prev, is_hot: e.target.checked }))}
-                className="w-5 h-5 accent-primary cursor-pointer"
-              />
-              <label htmlFor="is_hot" className="text-sm font-bold text-gray-700 cursor-pointer">
-                🔥 Đánh dấu là sản phẩm HOT (Đưa lên đầu danh sách)
-              </label>
-            </div>
-            <div className="flex items-center gap-3 bg-green-50/50 p-4 rounded-2xl border-2 border-green-50">
-              <input
-                type="checkbox"
-                id="in_stock"
-                checked={form.in_stock !== false}
-                onChange={(e) => setForm(prev => ({ ...prev, in_stock: e.target.checked }))}
-                className="w-5 h-5 accent-green-500 cursor-pointer"
-              />
-              <label htmlFor="in_stock" className="text-sm font-bold text-gray-700 cursor-pointer">
-                ✅ Còn hàng (bỏ chọn = Hết hàng)
-              </label>
-            </div>
+          {/* Trạng thái */}
+          <div className="flex gap-6">
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div
+                onClick={() => setForm(prev => ({ ...prev, is_hot: !prev.is_hot }))}
+                className={`w-12 h-6 rounded-full transition-colors relative ${form.is_hot ? 'bg-primary' : 'bg-gray-200'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.is_hot ? 'translate-x-7' : 'translate-x-1'}`}></div>
+              </div>
+              <span className="font-bold text-sm text-gray-700">🔥 Sản phẩm HOT</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div
+                onClick={() => setForm(prev => ({ ...prev, in_stock: !prev.in_stock }))}
+                className={`w-12 h-6 rounded-full transition-colors relative ${form.in_stock !== false ? 'bg-green-400' : 'bg-gray-200'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.in_stock !== false ? 'translate-x-7' : 'translate-x-1'}`}></div>
+              </div>
+              <span className="font-bold text-sm text-gray-700">✅ Còn hàng</span>
+            </label>
           </div>
 
-          {/* Ghi chú - hỗ trợ dán ảnh */}
+          {/* Ghi chú / Mô tả */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-bold text-gray-700">
-                Ghi chú
-                <span className="ml-2 text-xs font-normal text-gray-400">(hỗ trợ Markdown, dán ảnh Ctrl+V hoặc kéo thả)</span>
-              </label>
-              <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all border ${uploadingNote ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-50 border-blue-100 text-blue-600 hover:bg-blue-100'}`}>
-                {uploadingNote ? (
-                  <><div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div> Đang tải...</>
-                ) : (
-                  <>🖼️ Chèn ảnh</>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleNoteImageUpload}
-                  disabled={uploadingNote}
-                  className="hidden"
-                />
+            <label className="block text-gray-700 font-bold mb-2 text-sm">📝 Ghi chú / Mô tả (Markdown)</label>
+            {/* Toolbar */}
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <button type="button" onClick={() => insertTextAtCursor('**in đậm**')} className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-bold transition-colors" title="In đậm"><b>B</b></button>
+              <button type="button" onClick={() => insertTextAtCursor('# Tiêu đề\n')} className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-bold transition-colors" title="Tiêu đề">H</button>
+              <button type="button" onClick={() => insertTextAtCursor('> Trích dẫn\n')} className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-bold transition-colors" title="Trích dẫn">"</button>
+              <button type="button" onClick={() => insertTextAtCursor('- Mục 1\n- Mục 2\n')} className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-bold transition-colors" title="Danh sách">≡</button>
+              <button type="button" onClick={() => insertTextAtCursor('---\n')} className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-bold transition-colors" title="Đường kẻ ngang">—</button>
+              <label className="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-bold transition-colors cursor-pointer" title="Chèn ảnh">
+                🖼️ Chèn ảnh
+                <input type="file" accept="image/*" multiple onChange={handleNoteImageUpload} className="hidden" />
               </label>
             </div>
-
-            <div
-              className={`relative rounded-xl border-2 transition-all ${isDragOver ? 'border-blue-400 bg-blue-50' : 'border-pink-50'}`}
-              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-              onDragLeave={() => setIsDragOver(false)}
-            >
-              {isDragOver && (
-                <div className="absolute inset-0 flex items-center justify-center bg-blue-50/80 rounded-xl z-10 pointer-events-none">
-                  <div className="text-blue-500 font-bold text-sm flex flex-col items-center gap-2">
-                    <span className="text-3xl">🖼️</span>
-                    Thả ảnh vào đây để chèn
-                  </div>
-                </div>
-              )}
+            <div className={`border-2 rounded-2xl transition-colors ${isDragOver ? 'border-primary bg-pink-50' : 'border-pink-50'}`}>
               <textarea
                 ref={notesRef}
                 value={form.notes || ''}
-                onChange={(e) => setForm(prev => ({ ...prev, notes: e.target.value }))}
+                onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
                 onPaste={handleNotesPaste}
                 onDrop={handleNotesDrop}
                 onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
