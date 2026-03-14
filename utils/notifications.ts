@@ -26,6 +26,13 @@ export interface OrderNotificationData {
   notes: string;
   paymentMethod: string;
   accountInfo?: string | null;
+  // Thêm thông tin chuyển khoản
+  paymentDetails?: {
+    accountName: string;
+    bankName: string;
+    accountNo: string;
+    transferContent: string;
+  };
 }
 
 // ============================================================
@@ -60,6 +67,14 @@ export const sendTelegramNotification = async (order: OrderNotificationData): Pr
 💳 *Thanh toán:* ${order.paymentMethod}
 ${order.accountInfo ? `🔑 *Tài khoản:* ${order.accountInfo}` : ''}
 ${order.notes ? `📝 *Ghi chú:* ${order.notes}` : ''}
+${order.paymentDetails ? `
+━━━━━━━━━━━━━━━━━━━━
+💸 *THÔNG TIN CHUYỂN KHOẢN*
+🏦 *Ngân hàng:* ${order.paymentDetails.bankName}
+👤 *Chủ TK:* ${order.paymentDetails.accountName}
+🔢 *Số TK:* ${order.paymentDetails.accountNo}
+📝 *Nội dung:* ${order.paymentDetails.transferContent}
+` : ''}
 ━━━━━━━━━━━━━━━━━━━━
 🆔 *Mã đơn:* \`${order.orderId}\`
 🕐 *Thời gian:* ${new Date().toLocaleString('vi-VN')}
@@ -125,6 +140,11 @@ export const sendEmailNotification = async (order: OrderNotificationData): Promi
     account_info: order.accountInfo || 'N/A',
     notes: order.notes || 'Không có',
     order_time: new Date().toLocaleString('vi-VN'),
+    // Thêm thông tin chuyển khoản
+    bank_name: order.paymentDetails?.bankName || 'N/A',
+    account_name: order.paymentDetails?.accountName || 'N/A',
+    account_no: order.paymentDetails?.accountNo || 'N/A',
+    transfer_content: order.paymentDetails?.transferContent || 'N/A',
   };
 
   // Gửi email tới từng địa chỉ trong danh sách
