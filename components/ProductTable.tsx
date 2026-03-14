@@ -28,21 +28,14 @@ const ProductTable: React.FC<ProductTableProps> = ({
   const isCTV = user?.role === 'ctv';
   const isCtvtime = isCTV && user?.username === 'ctvtime';
   const [selectedVariantIndices, setSelectedVariantIndices] = useState<Record<string, number>>({});
-  const [showNotesModal, setShowNotesModal] = useState(false);
-  const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
 
   const handleBuyNow = (product: Product) => {
     navigate(`/checkout/${product.id}`);
   };
 
-  const handleOpenNotesModal = (product: Product) => {
-    setSelectedProductForModal(product);
-    setShowNotesModal(true);
-  };
-
-  const handleCloseNotesModal = () => {
-    setShowNotesModal(false);
-    setSelectedProductForModal(null);
+  // Chuyển sang trang ghi chú
+  const handleViewNotes = (product: Product) => {
+    navigate(`/product-notes/${product.id}`);
   };
 
   const getPrice = (
@@ -163,17 +156,17 @@ const ProductTable: React.FC<ProductTableProps> = ({
             )}
           </div>
         </td>
-        {/* CỘT GHI CHÚ - RIÊNG BIỆT */}
+        {/* CỘT GHI CHÚ - NHẤN VÀO ĐI TRANG MỚI */}
         <td className="px-6 py-4 min-w-[300px]">
           <button
-            onClick={() => handleOpenNotesModal(product)}
+            onClick={() => handleViewNotes(product)}
             className="text-sm text-gray-700 hover:text-primary transition-colors leading-relaxed line-clamp-3 text-left font-medium hover:underline cursor-pointer bg-gray-50 hover:bg-gray-100 p-3 rounded-lg w-full text-justify"
             title={product.notes}
           >
             {product.notes}
           </button>
         </td>
-        {/* CỘT NÚT MUA NGAY - RIÊNG BIỆT */}
+        {/* CỘT NÚT MUA NGAY */}
         <td className="px-6 py-4">
           {!isAdmin && (
             <button 
@@ -210,137 +203,6 @@ const ProductTable: React.FC<ProductTableProps> = ({
           </td>
         )}
       </tr>
-    );
-  };
-
-  // MODAL CHÚ THÍCH SẢN PHẨM
-  const renderNotesModal = () => {
-    if (!showNotesModal || !selectedProductForModal) return null;
-
-    return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-fade-in">
-        <div 
-          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-          onClick={handleCloseNotesModal}
-        ></div>
-        
-        <div className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-8 flex flex-col gap-6 animate-slide-up">
-          <button
-            onClick={handleCloseNotesModal}
-            className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-600 font-bold text-xl z-10"
-          >
-            ✕
-          </button>
-
-          <div className="pr-12">
-            <h2 className="text-3xl font-cute font-bold text-gray-900 mb-2">
-              {selectedProductForModal.name}
-            </h2>
-            <p className="text-sm text-gray-500">Thông tin chi tiết về sản phẩm</p>
-          </div>
-
-          {selectedProductForModal.image_url && (
-            <div className="w-full rounded-2xl overflow-hidden border border-gray-100 bg-gray-50">
-              <img
-                src={selectedProductForModal.image_url}
-                alt={selectedProductForModal.name}
-                className="w-full h-auto object-cover max-h-[350px]"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <div className="flex items-start gap-4 pb-4 border-b border-gray-200">
-              <div className="text-3xl shrink-0">📋</div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-2">Hình thức</h3>
-                <p className="text-gray-900 font-bold text-lg break-words">{selectedProductForModal.form}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 pb-4 border-b border-gray-200">
-              <div className="text-3xl shrink-0">📦</div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-2">Gói</h3>
-                <p className="text-gray-900 font-bold text-lg break-words">{selectedProductForModal.package}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 pb-4 border-b border-gray-200">
-              <div className="text-3xl shrink-0">🏷️</div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-2">Danh mục</h3>
-                <p className="text-gray-900 font-bold text-lg break-words">{selectedProductForModal.category}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 pb-4 border-b border-gray-200">
-              <div className="text-3xl shrink-0">💰</div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-2">Giá</h3>
-                <div className="space-y-2">
-                  <p className="text-gray-900 font-bold text-xl">
-                    {selectedProductForModal.price_public.toLocaleString('vi-VN')}đ
-                    <span className="text-xs text-gray-500 ml-2">(Giá công khai)</span>
-                  </p>
-                  <p className="text-gray-900 font-bold text-xl">
-                    {selectedProductForModal.price_ctv.toLocaleString('vi-VN')}đ
-                    <span className="text-xs text-green-600 ml-2">(Giá CTV)</span>
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 pb-4 border-b border-gray-200">
-              <div className="text-3xl shrink-0">📊</div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-2">Tình trạng</h3>
-                <p className={`font-bold text-lg ${selectedProductForModal.in_stock !== false ? 'text-green-600' : 'text-red-600'}`}>
-                  {selectedProductForModal.in_stock !== false ? '✅ Còn hàng' : '❌ Hết hàng'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 pb-4 border-b border-gray-200">
-              <div className="text-3xl shrink-0">📝</div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-2">Chú thích / Mô tả</h3>
-                <p className="text-gray-800 leading-relaxed whitespace-pre-wrap text-base break-words font-medium">
-                  {selectedProductForModal.notes}
-                </p>
-              </div>
-            </div>
-
-            {selectedProductForModal.variants && selectedProductForModal.variants.length > 0 && (
-              <div className="flex items-start gap-4 pb-4 border-b border-gray-200">
-                <div className="text-3xl shrink-0">🔄</div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-3">Các lựa chọn khác</h3>
-                  <div className="space-y-3">
-                    {selectedProductForModal.variants.map((variant, idx) => (
-                      <div key={idx} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <p className="font-bold text-gray-900 mb-2 break-words text-lg">{variant.form}</p>
-                        <div className="text-sm text-gray-700 space-y-1">
-                          <p>Giá công khai: <span className="font-bold text-gray-900 text-base">{variant.price_public.toLocaleString('vi-VN')}đ</span></p>
-                          <p>Giá CTV: <span className="font-bold text-green-600 text-base">{variant.price_ctv.toLocaleString('vi-VN')}đ</span></p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={handleCloseNotesModal}
-            className="w-full bg-primary hover:bg-pink-600 text-white py-3 rounded-2xl font-bold transition-all shadow-md shadow-primary/20 mt-4 text-lg"
-          >
-            Đóng
-          </button>
-        </div>
-      </div>
     );
   };
 
@@ -387,72 +249,66 @@ const ProductTable: React.FC<ProductTableProps> = ({
     }
 
     return (
-      <>
-        <div className="w-full space-y-8">
-          {sortedCategoryKeys.map((categoryName) => {
-            const catProducts = grouped[categoryName];
-            const sortedCatProducts = [...catProducts].sort((a: any, b: any) => {
-              if (b.is_hot === a.is_hot) return (a.sort_order || 0) - (b.sort_order || 0);
-              return b.is_hot ? 1 : -1;
-            });
+      <div className="w-full space-y-8">
+        {sortedCategoryKeys.map((categoryName) => {
+          const catProducts = grouped[categoryName];
+          const sortedCatProducts = [...catProducts].sort((a: any, b: any) => {
+            if (b.is_hot === a.is_hot) return (a.sort_order || 0) - (b.sort_order || 0);
+            return b.is_hot ? 1 : -1;
+          });
 
-            const catInfo = categories.find(c => c.name === categoryName);
-            const catColor = catInfo?.color || 'from-gray-400 to-gray-600';
-            const catIcon = catInfo?.icon || '📦';
-            const catDesc = catInfo?.desc || '';
+          const catInfo = categories.find(c => c.name === categoryName);
+          const catColor = catInfo?.color || 'from-gray-400 to-gray-600';
+          const catIcon = catInfo?.icon || '📦';
+          const catDesc = catInfo?.desc || '';
 
-            return (
-              <div key={categoryName} className="w-full">
-                <div className="flex items-center gap-3 mb-3 px-1">
-                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${catColor} flex items-center justify-center text-white text-lg shadow-sm shrink-0`}>
-                    {catIcon}
-                  </div>
-                  <div>
-                    <h3 className="font-cute font-bold text-gray-800 text-lg leading-tight">{categoryName}</h3>
-                    {catDesc && (
-                      <p className="text-xs text-gray-400">{catDesc}</p>
-                    )}
-                  </div>
-                  <span className="ml-auto text-xs text-gray-300 font-mono">{catProducts.length} sản phẩm</span>
+          return (
+            <div key={categoryName} className="w-full">
+              <div className="flex items-center gap-3 mb-3 px-1">
+                <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${catColor} flex items-center justify-center text-white text-lg shadow-sm shrink-0`}>
+                  {catIcon}
                 </div>
-
-                <div className="w-full overflow-x-auto bg-white rounded-3xl border border-gray-100 shadow-sm">
-                  <table className="w-full text-left border-collapse">
-                    {renderTableHeader(true)}
-                    <tbody className="font-body">
-                      {sortedCatProducts.map((product) => renderProductRow(product))}
-                    </tbody>
-                  </table>
+                <div>
+                  <h3 className="font-cute font-bold text-gray-800 text-lg leading-tight">{categoryName}</h3>
+                  {catDesc && (
+                    <p className="text-xs text-gray-400">{catDesc}</p>
+                  )}
                 </div>
+                <span className="ml-auto text-xs text-gray-300 font-mono">{catProducts.length} sản phẩm</span>
               </div>
-            );
-          })}
-        </div>
-        {renderNotesModal()}
-      </>
+
+              <div className="w-full overflow-x-auto bg-white rounded-3xl border border-gray-100 shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  {renderTableHeader(true)}
+                  <tbody className="font-body">
+                    {sortedCatProducts.map((product) => renderProductRow(product))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     );
   }
 
   return (
-    <>
-      <div className="w-full overflow-x-auto bg-white rounded-3xl border border-gray-100 shadow-sm">
-        <table className="w-full text-left border-collapse">
-          {renderTableHeader()}
-          <tbody className="font-body">
-            {products.length === 0 ? (
-              <tr>
-                <td colSpan={isAdmin ? (showCategory ? 9 : 8) : (showCategory ? 8 : 7)} className="px-6 py-12 text-center text-gray-400 italic">
-                  Chưa có sản phẩm nào được đăng...
-                </td>
-              </tr>
-            ) : (
-              products.map((product) => renderProductRow(product))
-            )}
-          </tbody>
-        </table>
-      </div>
-      {renderNotesModal()}
-    </>
+    <div className="w-full overflow-x-auto bg-white rounded-3xl border border-gray-100 shadow-sm">
+      <table className="w-full text-left border-collapse">
+        {renderTableHeader()}
+        <tbody className="font-body">
+          {products.length === 0 ? (
+            <tr>
+              <td colSpan={isAdmin ? (showCategory ? 9 : 8) : (showCategory ? 8 : 7)} className="px-6 py-12 text-center text-gray-400 italic">
+                Chưa có sản phẩm nào được đăng...
+              </td>
+            </tr>
+          ) : (
+            products.map((product) => renderProductRow(product))
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 };
 
