@@ -28,6 +28,7 @@ export interface Product {
   is_hot?: boolean; // Sản phẩm hot
   sort_order?: number; // Thứ tự sắp xếp
   in_stock?: boolean; // Tình trạng còn hàng (mặc định true nếu không có)
+  is_hidden?: boolean; // true = ẩn khỏi trang khách (admin vẫn thấy và vẫn sửa được)
   notes: string;
   category: string;
   created_at?: string;
