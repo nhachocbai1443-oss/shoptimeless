@@ -40,6 +40,8 @@ const ProductTable: React.FC<ProductTableProps> = ({
   const dragEnabled = isAdmin && groupByCategory && !!onReorder;
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [dragInsert, setDragInsert] = useState<'before' | 'after' | null>(null);
+  const [dragPreviewPos, setDragPreviewPos] = useState<{ x: number; y: number } | null>(null);
   const [previewCategory, setPreviewCategory] = useState<string | null>(null);
   const [previewIds, setPreviewIds] = useState<string[] | null>(null);
   // Bản ref của previewIds để lúc thả tay không bị đọc state cũ
@@ -77,6 +79,8 @@ const ProductTable: React.FC<ProductTableProps> = ({
     previewIdsRef.current = null;
     setDragId(null);
     setDragOverId(null);
+    setDragInsert(null);
+    setDragPreviewPos(null);
     setPreviewCategory(null);
     setPreviewIds(null);
     document.body.style.cursor = '';
@@ -101,6 +105,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
     };
     setDragId(product.id);
     setPreviewCategory(categoryName);
+    setDragPreviewPos({ x: e.clientX, y: e.clientY });
     previewIdsRef.current = base.map((p) => p.id);
     setPreviewIds(previewIdsRef.current);
     document.body.style.cursor = 'grabbing';
@@ -109,6 +114,14 @@ const ProductTable: React.FC<ProductTableProps> = ({
     const handleMove = (ev: PointerEvent) => {
       const baseRef = dragBaseRef.current;
       if (!baseRef) return;
+      setDragPreviewPos({ x: ev.clientX, y: ev.clientY });
+      // Kéo tới gần mép trên/dưới màn hình thì tự cuộn trang theo,
+      // để kéo được tới sản phẩm ở xa mà không phải thả tay giữa chừng.
+      if (ev.clientY < 90) {
+        window.scrollBy(0, -10);
+      } else if (ev.clientY > window.innerHeight - 90) {
+        window.scrollBy(0, 10);
+      }
       // Tìm hàng đang ở dưới con trỏ (chuột hoặc ngón tay).
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       const row = el?.closest?.('tr[data-product-id]') as HTMLElement | null;
@@ -118,6 +131,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
       if (!targetId || targetCategory !== baseRef.category) return;
       if (targetId === product.id) {
         setDragOverId(targetId);
+        setDragInsert(null);
         return;
       }
       setDragOverId(targetId);
@@ -126,9 +140,12 @@ const ProductTable: React.FC<ProductTableProps> = ({
       const withoutDragged = current.filter((id) => id !== product.id);
       let targetIndex = withoutDragged.indexOf(targetId);
       // Con trỏ ở nửa dưới của hàng đích thì chèn sau hàng đó,
-      // nửa trên thì chèn trước hàng đó.
+      // nửa trên thì chèn trước hàng đó. Lưu vị trí này để vẽ
+      // vạch hồng chèn vào đúng chỗ, nhìn là biết sẽ thả vào đâu.
       const rect = row.getBoundingClientRect();
-      if (ev.clientY > rect.top + rect.height / 2) {
+      const insertAfter = ev.clientY > rect.top + rect.height / 2;
+      setDragInsert(insertAfter ? 'after' : 'before');
+      if (insertAfter) {
         targetIndex += 1;
       }
       withoutDragged.splice(targetIndex, 0, product.id);
@@ -190,13 +207,24 @@ const ProductTable: React.FC<ProductTableProps> = ({
         key={product.id}
         data-product-id={product.id}
         data-category={rowCategory}
-        className="border-t border-gray-50 hover:bg-gray-50/30 transition-colors"
+        className="border-t border-gray-50 hover:bg-gray-50/30 transition-all duration-150"
         style={{
-          boxShadow: isDragOver
-            ? '0 -2px 0 0 #db2777 inset'
-            : '0 1px 6px 0 rgba(0,0,0,0.06)',
-          opacity: isDragging ? 0.5 : 1,
-          backgroundColor: isDragging ? '#fdf2f8' : undefined,
+          // Hàng đang kéo: nổi lên, mờ nhẹ, nền hồng nhạt.
+          // Hàng đích: vạch hồng dày ở đúng mép sẽ chèn vào
+          // (trên nếu chèn trước, dưới nếu chèn sau).
+          boxShadow: isDragging
+            ? '0 10px 24px rgba(219, 39, 119, 0.18)'
+            : isDragOver && dragInsert === 'before'
+              ? 'inset 0 3px 0 0 #db2777'
+              : isDragOver
+                ? 'inset 0 -3px 0 0 #db2777'
+                : '0 1px 6px 0 rgba(0,0,0,0.06)',
+          opacity: isDragging ? 0.55 : 1,
+          backgroundColor: isDragging
+            ? '#fdf2f8'
+            : isDragOver
+              ? '#fff1f2'
+              : undefined,
         }}
       >
         {showSortOrder && (
@@ -205,7 +233,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
               <span className="inline-flex flex-col items-center gap-1">
                 <span
                   onPointerDown={(e) => handleDragStart(e, product, rowCategory)}
-                  className="text-gray-400 hover:text-primary cursor-grab active:cursor-grabbing select-none leading-none text-base"
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-pink-50 text-primary border border-pink-100 hover:bg-pink-100 hover:scale-105 active:scale-95 active:cursor-grabbing cursor-grab select-none leading-none text-base shadow-sm transition-all"
                   style={{ touchAction: 'none' }}
                   title="Nhấn giữ để kéo đổi thứ tự"
                 >
@@ -357,17 +385,29 @@ const ProductTable: React.FC<ProductTableProps> = ({
                 <button
                   type="button"
                   onClick={() => onToggleHidden(product)}
-                  className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${
-                    product.is_hidden ? 'bg-gray-200' : 'bg-green-400'
+                  className={`w-14 h-7 rounded-full transition-all duration-200 relative shrink-0 shadow-inner hover:scale-105 active:scale-95 ${
+                    product.is_hidden
+                      ? 'bg-gray-200'
+                      : 'bg-gradient-to-r from-green-400 to-emerald-500 shadow-green-200'
                   }`}
                   title={product.is_hidden ? 'Đang ẩn — bấm để hiện lại' : 'Đang hiện — bấm để ẩn'}
                   aria-label={product.is_hidden ? 'Hiện sản phẩm' : 'Ẩn sản phẩm'}
                 >
                   <span
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                      product.is_hidden ? 'translate-x-1' : 'translate-x-5'
+                    className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-md flex items-center justify-center transition-transform duration-200 ${
+                      product.is_hidden ? 'translate-x-0' : 'translate-x-7'
                     }`}
-                  />
+                  >
+                    {product.is_hidden ? (
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 2L10 10M10 2L2 10" stroke="#9ca3af" strokeWidth="1.8" strokeLinecap="round" />
+                      </svg>
+                    ) : (
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 6.5L4.5 9L10 3" stroke="#16a34a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
                 </button>
               )}
               {onDuplicate && (
@@ -496,6 +536,30 @@ const ProductTable: React.FC<ProductTableProps> = ({
             </div>
           );
         })}
+        {/* Thẻ nổi đi theo con trỏ khi đang kéo: nhìn là biết mình
+            đang cầm sản phẩm nào, thay vì chỉ thấy hàng cũ mờ đi. */}
+        {dragEnabled && dragId && dragPreviewPos && (() => {
+          const dragged = products.find((p) => p.id === dragId);
+          if (!dragged) return null;
+          return (
+            <div
+              className="fixed z-[300] pointer-events-none flex items-center gap-2 bg-white border border-pink-200 rounded-2xl shadow-xl shadow-pink-200 px-3 py-2 max-w-[280px]"
+              style={{ left: dragPreviewPos.x + 16, top: dragPreviewPos.y + 16 }}
+            >
+              {dragged.image_url && (
+                <img
+                  src={dragged.image_url}
+                  alt=""
+                  className="w-8 h-8 rounded-lg object-cover shrink-0"
+                  referrerPolicy="no-referrer"
+                />
+              )}
+              <span className="text-xs font-bold text-gray-800 leading-tight">
+                {dragged.name}
+              </span>
+            </div>
+          );
+        })()}
       </div>
     );
   }
