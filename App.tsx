@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { auth, db } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import Layout from './components/Layout';
 import Home from './pages/Home';
@@ -12,69 +12,219 @@ import ProductFormPage from './pages/ProductFormPage';
 import ProductNotesPage from './pages/ProductNotesPage';
 import { User } from './types';
 
+const SESSION_KEY = 'studytimeless_user';
+
+/**
+ * Vì sao trang admin "để lâu rồi vào lại thì bấm Sửa không được,
+ * thoát ra đăng nhập lại mới được":
+ *
+ * 1. Web này đăng nhập chỉ bằng username, lưu vào localStorage, KHÔNG
+ *    đăng nhập Firebase Auth thật. Vì vậy auth.currentUser luôn là null
+ *    và không có ID token nào để Firebase SDK tự làm mới sau ~1 giờ.
+ *    Đoạn code cũ ghi chú "Firebase tự refresh" là không đúng với app này.
+ * 2. Code cũ chỉ kiểm tra lại session khi `visibilitychange`, mà không
+ *    chạy khi quay lại bằng nút Back, khi focus cửa sổ, hay khi tab được
+ *    khôi phục từ bộ nhớ đệm của trình duyệt (bfcache). Lúc đó trang vẫn
+ *    render từ dữ liệu cũ trong bộ nhớ, nhưng state admin / kết nối
+ *    Firestore đã lệch, nên bấm Sửa không đi tiếp được.
+ * 3. Khi kiểm tra lại mà Firestore trả lỗi (mạng chập chờn,
+ *    permission-denied do token cũ), code cũ giữ nguyên session cũ và
+ *    không làm gì thêm, nên lần bấm tiếp theo vẫn lỗi y hệt.
+ *
+ * Cách fix trong file này (chỉ sửa App.tsx, không sửa giao diện,
+ * không sửa ProductTable, không đổi luồng đăng nhập):
+ *
+ * - Tạo một phiên Firebase Auth ẩn (anonymous) và để SDK tự làm mới
+ *   token của nó. Phiên này KHÔNG thay thế đăng nhập username: cổng
+ *   admin vẫn chỉ mở khi user trong localStorage có role === 'admin'.
+ *   Nếu trong Firebase Console chưa bật Anonymous thì bước này lỗi
+ *   im lặng và web vẫn chạy như cũ, chỉ không có token để tự làm mới.
+ * - Mỗi lần quay lại trang (mở trang, hiện tab, focus cửa sổ, khôi phục
+ *   từ bfcache) đều đối chiếu lại username đã lưu với bảng `users`
+ *   trong Firestore và sửa lại state + localStorage cho khớp, KHÔNG
+ *   cần đăng xuất / đăng nhập lại.
+ * - Lỗi thoáng qua (mất mạng, permission) KHÔNG được đăng xuất user,
+ *   chỉ giữ nguyên session đang có để lần sau tự sửa lại.
+ */
 function App() {
-  // Simple auth state persistence using localStorage
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('studytimeless_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem(SESSION_KEY);
+      if (!saved) return null;
+      const parsed = JSON.parse(saved) as User;
+      // Session hỏng (không có username) thì bỏ, tránh crash cả trang.
+      if (!parsed || typeof parsed.username !== 'string' || !parsed.username) {
+        localStorage.removeItem(SESSION_KEY);
+        return null;
+      }
+      return parsed;
+    } catch {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
   });
 
-  // Lắng nghe Firebase Auth token thay đổi/hết hạn
-  // Khi token hết hạn, Firebase tự refresh silently nếu còn session hợp lệ.
-  // Nếu Firestore trả về permission-denied do token cũ, ta reload lại user từ DB.
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      // Dự án này dùng custom username auth (không dùng Firebase Auth email/password)
-      // nên firebaseUser thường là null. Ta chỉ cần đảm bảo Firestore token được làm mới.
-      // Không làm gì thêm ở đây — chỉ đăng ký listener để Firebase SDK tự refresh token.
-    });
-    return () => unsubscribe();
+  // Chặn chạy trùng nhiều lần khi focus + visibilitychange bắn cùng lúc.
+  const refreshInFlight = useRef<Promise<User | null> | null>(null);
+  // Nếu Firebase chưa bật Anonymous thì chỉ cảnh báo 1 lần, không spam.
+  const anonymousFailed = useRef(false);
+
+  const handleLogout = useCallback(() => {
+    setUser(null);
+    localStorage.removeItem(SESSION_KEY);
   }, []);
 
-  // Khi tab được focus lại sau thời gian dài, kiểm tra và làm mới session
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        const saved = localStorage.getItem('studytimeless_user');
-        if (!saved) return;
+  // Đảm bảo có một phiên Firebase Auth thật để SDK tự làm mới token.
+  // Trả về true nếu đã có phiên hoặc vừa tạo được, false nếu không
+  // (ví dụ chưa bật Anonymous trong Firebase Console).
+  const ensureFirebaseSession = useCallback(async (): Promise<boolean> => {
+    try {
+      if (auth.currentUser) return true;
+      if (anonymousFailed.current) return false;
+      await signInAnonymously(auth);
+      return true;
+    } catch (err) {
+      anonymousFailed.current = true;
+      console.warn(
+        'Firebase anonymous sign-in không dùng được (có thể chưa bật ' +
+          'Anonymous trong Firebase Console > Authentication). ' +
+          'Web vẫn chạy bằng session username như cũ.',
+        err
+      );
+      return false;
+    }
+  }, []);
 
-        try {
-          const savedUser: User = JSON.parse(saved);
-          // Kiểm tra user vẫn còn tồn tại trong DB bằng cách query nhẹ
-          const q = query(
-            collection(db, 'users'),
-            where('username', '==', savedUser.username)
-          );
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            const freshDoc = snap.docs[0];
-            const freshUser: User = { id: freshDoc.id, ...freshDoc.data() } as User;
-            // Cập nhật lại state và localStorage với dữ liệu mới nhất
-            setUser(freshUser);
-            localStorage.setItem('studytimeless_user', JSON.stringify(freshUser));
-          } else {
-            // User không còn tồn tại → đăng xuất
-            handleLogout();
-          }
-        } catch (err) {
-          // Nếu lỗi mạng hoặc permission → giữ nguyên session hiện tại, không logout
-          console.warn('Session refresh skipped:', err);
+  // Đối chiếu session username đã lưu với DB, sửa lại state + localStorage.
+  // - User không còn trong DB -> đăng xuất thật (đây là trường hợp duy
+  //   nhất được phép đăng xuất tự động).
+  // - Lỗi mạng / permission -> giữ nguyên session, không đăng xuất,
+  //   để lần quay lại sau tự sửa.
+  const refreshSession = useCallback(async (): Promise<User | null> => {
+    if (refreshInFlight.current) return refreshInFlight.current;
+
+    const run = (async (): Promise<User | null> => {
+      let saved: User | null = null;
+      try {
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (!raw) return null;
+        saved = JSON.parse(raw) as User;
+        if (!saved || typeof saved.username !== 'string' || !saved.username) {
+          return null;
         }
+      } catch {
+        return null;
+      }
+
+      // Có token Firebase thật trước rồi mới query, để query không phải
+      // chạy bằng kết nối cũ đã hết hạn sau thời gian dài không vào.
+      await ensureFirebaseSession();
+
+      try {
+        const q = query(
+          collection(db, 'users'),
+          where('username', '==', saved.username)
+        );
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          // User đã bị xóa khỏi DB -> đăng xuất là đúng.
+          handleLogout();
+          return null;
+        }
+        const data = snap.docs[0].data();
+        // DB thắng nếu có đủ field; field nào DB thiếu thì giữ lại giá
+        // trị đã lưu, tránh ghi đè session tốt bằng document thiếu role.
+        const freshUser: User = {
+          ...saved,
+          ...data,
+          id: snap.docs[0].id,
+          username: (data.username as string) || saved.username,
+          role: (data.role as User['role']) || saved.role,
+        } as User;
+        setUser(freshUser);
+        localStorage.setItem(SESSION_KEY, JSON.stringify(freshUser));
+        return freshUser;
+      } catch (err) {
+        // Lỗi thoáng qua: giữ nguyên session, tuyệt đối không logout.
+        console.warn('Session refresh skipped:', err);
+        return saved;
+      }
+    })();
+
+    refreshInFlight.current = run;
+    try {
+      return await run;
+    } finally {
+      refreshInFlight.current = null;
+    }
+  }, [ensureFirebaseSession, handleLogout]);
+
+  // Lắng nghe Firebase Auth: nếu phiên ẩn bị mất thì tạo lại im lặng,
+  // không động vào session username (không đăng xuất user).
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser && localStorage.getItem(SESSION_KEY)) {
+        await ensureFirebaseSession();
+      }
+    });
+    return () => unsubscribe();
+  }, [ensureFirebaseSession]);
+
+  // Làm mới session mỗi lần quay lại trang, bằng mọi đường quay lại:
+  // mở trang lần đầu, hiện tab, focus cửa sổ, khôi phục từ bfcache.
+  // Code cũ chỉ có visibilitychange nên bỏ sót các đường còn lại.
+  useEffect(() => {
+    refreshSession();
+
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshSession();
+      }
+    };
+    const handleFocus = () => {
+      refreshSession();
+    };
+    const handlePageShow = (event: PageTransitionEvent) => {
+      // Tab khôi phục từ bfcache: React state + kết nối Firestore có
+      // thể đã cũ, nên đối chiếu lại session ngay.
+      if (event.persisted) {
+        refreshSession();
+      }
+    };
+    // Tab khác đăng nhập / đăng xuất thì tab này đồng bộ theo, khỏi
+    // rơi vào trạng thái 1 tab đã thoát mà 1 tab vẫn tưởng còn admin.
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== SESSION_KEY) return;
+      if (!event.newValue) {
+        setUser(null);
+        return;
+      }
+      try {
+        const parsed = JSON.parse(event.newValue) as User;
+        if (parsed && parsed.username) setUser(parsed);
+      } catch {
+        // Giá trị hỏng thì để lần refresh sau xử lý, không crash trang.
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+    document.addEventListener('visibilitychange', handleVisible);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisible);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [refreshSession]);
 
   const handleLogin = (newUser: User) => {
     setUser(newUser);
-    localStorage.setItem('studytimeless_user', JSON.stringify(newUser));
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('studytimeless_user');
+    localStorage.setItem(SESSION_KEY, JSON.stringify(newUser));
+    // Tạo luôn phiên Firebase ẩn ngay sau khi đăng nhập, để các lần
+    // lưu sản phẩm sau đó không phải chạy bằng kết nối không token.
+    ensureFirebaseSession();
   };
 
   return (
@@ -82,38 +232,38 @@ function App() {
       <Layout user={user} onLogout={handleLogout}>
         <Routes>
           <Route path="/" element={<Home user={user} />} />
-          
-          <Route 
-            path="/login" 
+
+          <Route
+            path="/login"
             element={
-              user 
+              user
                 ? <Navigate to="/" replace />
                 : <Login onLogin={handleLogin} />
-            } 
-          />
-          
-          <Route 
-            path="/admin" 
-            element={
-              user && user.role === 'admin'
-                ? <AdminDashboard user={user} /> 
-                : <Navigate to="/" />
-            } 
+            }
           />
 
-          <Route 
-            path="/admin/product/:productId" 
+          <Route
+            path="/admin"
             element={
               user && user.role === 'admin'
-                ? <ProductFormPage user={user} /> 
+                ? <AdminDashboard user={user} />
                 : <Navigate to="/" />
-            } 
+            }
+          />
+
+          <Route
+            path="/admin/product/:productId"
+            element={
+              user && user.role === 'admin'
+                ? <ProductFormPage user={user} />
+                : <Navigate to="/" />
+            }
           />
 
           <Route path="/checkout/:productId" element={<CheckoutPage user={user} />} />
 
           <Route path="/product-notes/:productId" element={<ProductNotesPage />} />
-          
+
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Layout>
