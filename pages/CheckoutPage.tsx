@@ -87,6 +87,18 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
     );
   }
 
+  // Sản phẩm đang ẩn thì chặn luôn đường checkout trực tiếp (kẻo
+  // khách còn giữ link cũ vẫn đặt được), chỉ admin mới mở được để kiểm tra.
+  if (product.is_hidden && user?.role !== 'admin') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <h2 className="text-2xl font-bold text-gray-800">🙈 Sản phẩm này hiện đang ẩn!</h2>
+        <p className="text-gray-500">Sản phẩm tạm thời không mở bán, bạn xem các sản phẩm khác nhé.</p>
+        <Link to="/" className="text-primary font-bold hover:underline">Quay lại trang chủ</Link>
+      </div>
+    );
+  }
+
   const currentForm = selectedVariant ? selectedVariant.form : product.form;
   const unitPrice = selectedVariant 
     ? (isCTV ? selectedVariant.price_ctv : selectedVariant.price_public)
