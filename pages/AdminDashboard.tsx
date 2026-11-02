@@ -227,6 +227,30 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
     }
   };
 
+  // Gạt ẩn/hiện 1 sản phẩm: chỉ đổi cờ is_hidden, không xóa sản
+  // phẩm, không đổi ảnh/giá/ghi chú. Ẩn rồi thì khách không thấy
+  // ở trang chủ và không checkout được bằng link trực tiếp nữa,
+  // nhưng admin vẫn thấy (mờ hơn + badge "Đang ẩn") để gạt hiện lại.
+  // Cập nhật giao diện ngay, ghi lỗi thì trả lại trạng thái cũ.
+  const handleToggleHidden = async (product: Product) => {
+    const nextHidden = !product.is_hidden;
+    const previousProducts = products;
+    setProducts(
+      products.map((p) =>
+        p.id === product.id ? { ...p, is_hidden: nextHidden } : p
+      )
+    );
+    try {
+      await updateDoc(doc(db, 'products', product.id), {
+        is_hidden: nextHidden,
+      });
+    } catch (err) {
+      console.error('Error toggling product visibility:', err);
+      alert('Lỗi khi đổi trạng thái ẩn/hiện!');
+      setProducts(previousProducts);
+    }
+  };
+
   // Lưu thứ tự kéo-thả: orderedIds là thứ tự mới trong 1 danh mục.
   // Gán lại sort_order = 1, 2, 3... theo đúng thứ tự đó, cập nhật
   // giao diện ngay rồi mới ghi Firestore; ghi lỗi thì trả lại thứ
@@ -569,6 +593,7 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
                 user={user}
                 onEdit={(p) => navigate(`/admin/product/${p.id}`)}
                 onDuplicate={handleDuplicateProduct}
+                onToggleHidden={handleToggleHidden}
                 onReorder={handleReorderProducts}
                 onDelete={handleDeleteProduct}
                 showCategory={true}
