@@ -8,6 +8,7 @@ interface ProductTableProps {
   onEdit?: (product: Product) => void;
   onDelete?: (id: string) => void;
   onDuplicate?: (product: Product) => void;
+  onToggleHidden?: (product: Product) => void;
   onReorder?: (category: string, orderedIds: string[]) => void;
   showCategory?: boolean;
   showSortOrder?: boolean;
@@ -21,6 +22,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
   onEdit,
   onDelete,
   onDuplicate,
+  onToggleHidden,
   onReorder,
   showCategory = false,
   showSortOrder = false,
@@ -349,6 +351,23 @@ const ProductTable: React.FC<ProductTableProps> = ({
               >
                 ✏️
               </button>
+              {onToggleHidden && (
+                <button
+                  type="button"
+                  onClick={() => onToggleHidden(product)}
+                  className={`w-12 h-6 rounded-full transition-colors relative shrink-0 ${
+                    product.is_hidden ? 'bg-gray-200' : 'bg-green-400'
+                  }`}
+                  title={product.is_hidden ? 'Đang ẩn — bấm để hiện lại' : 'Đang hiện — bấm để ẩn'}
+                  aria-label={product.is_hidden ? 'Hiện sản phẩm' : 'Ẩn sản phẩm'}
+                >
+                  <span
+                    className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                      product.is_hidden ? 'translate-x-1' : 'translate-x-7'
+                    }`}
+                  />
+                </button>
+              )}
               {onDuplicate && (
                 <button
                   onClick={() => onDuplicate(product)}
@@ -479,22 +498,29 @@ const ProductTable: React.FC<ProductTableProps> = ({
     );
   }
 
+  // Khách (không phải admin) không bao giờ thấy sản phẩm đang ẩn,
+  // kể cả khi component này được dùng ở trang khác ngoài Home.
+  // Admin vẫn thấy đủ để gạt hiện lại.
+  const customerProducts = isAdmin
+    ? products
+    : products.filter((p) => !p.is_hidden);
+
   // Chỉ hiện cột ghi chú nếu ít nhất 1 sản phẩm có ghi chú
-  const hasNotes = products.some(p => p.notes && p.notes.trim() !== '');
+  const hasNotes = customerProducts.some(p => p.notes && p.notes.trim() !== '');
 
   return (
     <div className="w-full overflow-x-auto bg-white rounded-3xl border border-gray-100 shadow-sm">
       <table className="w-full text-left border-collapse">
         {renderTableHeader(hasNotes)}
         <tbody className="font-body">
-          {products.length === 0 ? (
+          {customerProducts.length === 0 ? (
             <tr>
               <td colSpan={isAdmin ? (showCategory ? 9 : 8) : (showCategory ? 8 : 7)} className="px-6 py-12 text-center text-gray-400 italic">
                 Chưa có sản phẩm nào được đăng...
               </td>
             </tr>
           ) : (
-            products.map((product) => renderProductRow(product, hasNotes))
+            customerProducts.map((product) => renderProductRow(product, hasNotes))
           )}
         </tbody>
       </table>
