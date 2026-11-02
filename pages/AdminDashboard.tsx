@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, where, writeBatch } from 'firebase/firestore';
 import { uploadImageToSupabase } from '../supabase';
 import { Product, User, UserRole, Order, Category } from '../types';
 import ProductTable from '../components/ProductTable';
@@ -187,6 +187,71 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
       fetchProducts();
     } catch (err) {
       alert('Lỗi khi xóa sản phẩm!');
+    }
+  };
+
+  // Nhân bản: tạo 1 sản phẩm mới giống hệt bản gốc (kể cả ảnh, giá,
+  // biến thể, ghi chú), tên thêm "(Bản sao)", xếp ngay sau bản gốc
+  // trong cùng danh mục. Dùng writeBatch để việc dời các sản phẩm
+  // phía sau xuống 1 bậc và việc tạo bản sao thành công cùng lúc,
+  // tránh dở dang (tạo xong mà thứ tự chưa dời, hoặc ngược lại).
+  const handleDuplicateProduct = async (product: Product) => {
+    try {
+      const categoryKey = product.category || 'Khác';
+      const originalOrder = product.sort_order || 0;
+      const batch = writeBatch(db);
+      products
+        .filter((p) => (p.category || 'Khác') === categoryKey)
+        .forEach((p) => {
+          if ((p.sort_order || 0) > originalOrder) {
+            batch.update(doc(db, 'products', p.id), {
+              sort_order: (p.sort_order || 0) + 1,
+            });
+          }
+        });
+      const { id, ...rest } = product as any;
+      batch.set(doc(collection(db, 'products')), {
+        ...rest,
+        name: product.name.endsWith('(Bản sao)')
+          ? product.name
+          : `${product.name} (Bản sao)`,
+        sort_order: originalOrder + 1,
+        created_at: new Date().toISOString(),
+      });
+      await batch.commit();
+      alert(`Đã nhân bản: ${product.name} (Bản sao)`);
+      fetchProducts();
+    } catch (err) {
+      console.error('Error duplicating product:', err);
+      alert('Lỗi khi nhân bản sản phẩm!');
+    }
+  };
+
+  // Lưu thứ tự kéo-thả: orderedIds là thứ tự mới trong 1 danh mục.
+  // Gán lại sort_order = 1, 2, 3... theo đúng thứ tự đó, cập nhật
+  // giao diện ngay rồi mới ghi Firestore; ghi lỗi thì trả lại thứ
+  // tự cũ và báo để bạn kéo lại, tránh bảng hiển thị 1 đằng, DB 1 nẻo.
+  const handleReorderProducts = async (category: string, orderedIds: string[]) => {
+    const previousProducts = products;
+    const updatedProducts = products.map((p) => {
+      const newIndex = orderedIds.indexOf(p.id);
+      if ((p.category || 'Khác') === category && newIndex >= 0) {
+        return { ...p, sort_order: newIndex + 1 };
+      }
+      return p;
+    });
+    setProducts(updatedProducts);
+    try {
+      const batch = writeBatch(db);
+      orderedIds.forEach((productId, index) => {
+        batch.update(doc(db, 'products', productId), { sort_order: index + 1 });
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error('Error saving product order:', err);
+      alert('Lỗi khi lưu thứ tự! Đã trả lại thứ tự cũ, bạn kéo lại giúp mình.');
+      setProducts(previousProducts);
+      fetchProducts();
     }
   };
 
@@ -499,10 +564,12 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
             {loadingProducts ? (
               <div className="text-center py-20 text-gray-400">Đang tải sản phẩm...</div>
             ) : (
-              <ProductTable 
-                products={products} 
-                user={user} 
+              <ProductTable
+                products={products}
+                user={user}
                 onEdit={(p) => navigate(`/admin/product/${p.id}`)}
+                onDuplicate={handleDuplicateProduct}
+                onReorder={handleReorderProducts}
                 onDelete={handleDeleteProduct}
                 showCategory={true}
                 showSortOrder={true}
