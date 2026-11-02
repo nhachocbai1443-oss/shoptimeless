@@ -101,6 +101,9 @@ const Home: React.FC<Props> = ({ user }) => {
   };
 
   const filteredProducts = products.filter(p => {
+    // Sản phẩm đang ẩn thì khách và CTV không thấy ở trang chủ;
+    // chỉ admin (đang xem để kiểm tra) mới thấy.
+    if (user?.role !== 'admin' && p.is_hidden) return false;
     const q = removeAccents(searchQuery.toLowerCase().trim());
     if (!q) return true;
     const name = removeAccents((p.name || '').toLowerCase());
