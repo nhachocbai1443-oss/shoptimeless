@@ -200,7 +200,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
         }}
       >
         {showSortOrder && (
-          <td className="px-6 py-4 text-center">
+          <td className="px-3 py-4 text-center">
             {dragEnabled ? (
               <span className="inline-flex flex-col items-center gap-1">
                 <span
@@ -325,10 +325,12 @@ const ProductTable: React.FC<ProductTableProps> = ({
             ) : null}
           </td>
         )}
-        {/* CỘT NÚT MUA NGAY */}
-        <td className="px-6 py-4">
-          {!isAdmin && (
-            <button 
+        {/* CỘT NÚT MUA NGAY — chỉ khách mới có. Admin không mua nên
+            bỏ hẳn cột này ở bảng admin, khỏi đội bảng rộng ra rồi
+            đẩy nút Xóa ra ngoài khung như trước. */}
+        {!isAdmin && (
+          <td className="px-6 py-4">
+            <button
               onClick={() => handleBuyNow(product)}
               disabled={!inStock}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 w-fit whitespace-nowrap ${
@@ -339,14 +341,14 @@ const ProductTable: React.FC<ProductTableProps> = ({
             >
               {inStock ? <><span>🛒</span> Mua ngay</> : <><span>⏳</span> Hết hàng</>}
             </button>
-          )}
-        </td>
+          </td>
+        )}
         {isAdmin && (
-          <td className="px-6 py-4 text-center">
-            <div className="flex items-center justify-center gap-2">
+          <td className="px-3 py-4 text-center">
+            <div className="flex items-center justify-center gap-1.5 flex-nowrap">
               <button
                 onClick={() => onEdit?.(product)}
-                className="w-9 h-9 flex items-center justify-center bg-yellow-50 text-yellow-600 rounded-xl hover:bg-yellow-100 transition-colors border border-yellow-100"
+                className="w-8 h-8 shrink-0 flex items-center justify-center bg-yellow-50 text-yellow-600 rounded-xl hover:bg-yellow-100 transition-colors border border-yellow-100"
                 title="Sửa"
               >
                 ✏️
@@ -355,7 +357,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                 <button
                   type="button"
                   onClick={() => onToggleHidden(product)}
-                  className={`w-12 h-6 rounded-full transition-colors relative shrink-0 ${
+                  className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${
                     product.is_hidden ? 'bg-gray-200' : 'bg-green-400'
                   }`}
                   title={product.is_hidden ? 'Đang ẩn — bấm để hiện lại' : 'Đang hiện — bấm để ẩn'}
@@ -363,7 +365,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                 >
                   <span
                     className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                      product.is_hidden ? 'translate-x-1' : 'translate-x-7'
+                      product.is_hidden ? 'translate-x-1' : 'translate-x-5'
                     }`}
                   />
                 </button>
@@ -371,7 +373,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
               {onDuplicate && (
                 <button
                   onClick={() => onDuplicate(product)}
-                  className="w-9 h-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors border border-blue-100"
+                  className="w-8 h-8 shrink-0 flex items-center justify-center bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors border border-blue-100"
                   title="Nhân bản (tạo bản sao ngay sau sản phẩm này, giữ nguyên ảnh)"
                 >
                   📋
@@ -379,7 +381,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
               )}
               <button
                 onClick={() => onDelete?.(product.id)}
-                className="w-9 h-9 flex items-center justify-center bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+                className="w-8 h-8 shrink-0 flex items-center justify-center bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
                 title="Xóa"
               >
                 🗑️
@@ -394,15 +396,15 @@ const ProductTable: React.FC<ProductTableProps> = ({
   const renderTableHeader = (showNotes: boolean, hideCategory = false) => (
     <thead>
       <tr className="bg-gray-50/50 text-gray-500 font-cute text-sm uppercase tracking-wider">
-        {showSortOrder && <th className="px-6 py-4 font-bold text-center">STT</th>}
+        {showSortOrder && <th className="px-3 py-4 font-bold text-center">STT</th>}
         <th className="px-6 py-4 font-bold">Sản phẩm</th>
         {showCategory && !hideCategory && <th className="px-6 py-4 font-bold">Danh mục</th>}
         <th className="px-6 py-4 font-bold">Hình thức</th>
         <th className="px-6 py-4 font-bold">Gói</th>
         <th className="px-6 py-4 font-bold">Giá</th>
         {showNotes && <th className="px-6 py-4 font-bold">Ghi chú</th>}
-        <th className="px-6 py-4 font-bold">Hành động</th>
-        {isAdmin && <th className="px-6 py-4 text-center font-bold">Thao tác</th>}
+        {!isAdmin && <th className="px-6 py-4 font-bold">Hành động</th>}
+        {isAdmin && <th className="px-3 py-4 text-center font-bold">Thao tác</th>}
       </tr>
     </thead>
   );
@@ -515,7 +517,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
         <tbody className="font-body">
           {customerProducts.length === 0 ? (
             <tr>
-              <td colSpan={isAdmin ? (showCategory ? 9 : 8) : (showCategory ? 8 : 7)} className="px-6 py-12 text-center text-gray-400 italic">
+              <td colSpan={isAdmin ? (showCategory ? 8 : 7) : (showCategory ? 8 : 7)} className="px-6 py-12 text-center text-gray-400 italic">
                 Chưa có sản phẩm nào được đăng...
               </td>
             </tr>
