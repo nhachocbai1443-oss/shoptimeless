@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Product, User, Category } from '../types';
 
@@ -7,17 +7,21 @@ interface ProductTableProps {
   user: User | null;
   onEdit?: (product: Product) => void;
   onDelete?: (id: string) => void;
+  onDuplicate?: (product: Product) => void;
+  onReorder?: (category: string, orderedIds: string[]) => void;
   showCategory?: boolean;
   showSortOrder?: boolean;
   groupByCategory?: boolean;
   categories?: Category[];
 }
 
-const ProductTable: React.FC<ProductTableProps> = ({ 
-  products, 
-  user, 
-  onEdit, 
-  onDelete, 
+const ProductTable: React.FC<ProductTableProps> = ({
+  products,
+  user,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  onReorder,
   showCategory = false,
   showSortOrder = false,
   groupByCategory = false,
@@ -28,6 +32,124 @@ const ProductTable: React.FC<ProductTableProps> = ({
   const isCTV = user?.role === 'ctv';
   const isCtvtime = isCTV && user?.username === 'ctvtime';
   const [selectedVariantIndices, setSelectedVariantIndices] = useState<Record<string, number>>({});
+
+  // Kéo-thả chỉ bật ở bảng quản trị (nhóm theo danh mục + có onReorder).
+  // Trang khách không truyền onReorder nên không bị ảnh hưởng gì.
+  const dragEnabled = isAdmin && groupByCategory && !!onReorder;
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [previewCategory, setPreviewCategory] = useState<string | null>(null);
+  const [previewIds, setPreviewIds] = useState<string[] | null>(null);
+  // Bản ref của previewIds để lúc thả tay không bị đọc state cũ
+  // (closure của handler gắn lúc bắt đầu kéo).
+  const previewIdsRef = useRef<string[] | null>(null);
+  // Thứ tự gốc của danh mục đang kéo, chụp lại lúc bắt đầu kéo để
+  // tính thứ tự xem trước và để so sánh khi thả (không đổi thì khỏi lưu).
+  const dragBaseRef = useRef<{ category: string; ids: string[] } | null>(null);
+
+  // Thứ tự gốc trong 1 danh mục ở bảng quản trị: chỉ theo sort_order,
+  // KHÔNG đẩy HOT lên đầu như trước, để thứ tự bạn kéo là thứ tự thật
+  // hiển thị trong bảng và được lưu xuống Firestore. Trang khách vẫn
+  // giữ luật HOT lên đầu riêng (xem Home.tsx), không đổi ở đây.
+  const baseOrderForCategory = (categoryName: string): Product[] => {
+    const inCategory = products.filter(
+      (p) => (p.category || 'Khác') === categoryName
+    );
+    return [...inCategory].sort(
+      (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
+    );
+  };
+
+  const endDrag = () => {
+    const base = dragBaseRef.current;
+    const finalIds = previewIdsRef.current;
+    // Chỉ lưu khi thứ tự xem trước khác thứ tự gốc.
+    if (
+      base &&
+      finalIds &&
+      finalIds.join(',') !== base.ids.join(',')
+    ) {
+      onReorder?.(base.category, finalIds);
+    }
+    dragBaseRef.current = null;
+    previewIdsRef.current = null;
+    setDragId(null);
+    setDragOverId(null);
+    setPreviewCategory(null);
+    setPreviewIds(null);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  };
+
+  // Kéo bằng Pointer Events (chuột + cảm ứng đều chạy), chỉ bắt đầu
+  // từ tay cầm ⋮⋮ ở cột STT nên bấm Sửa/Xóa/Nhân bản và cuộn trang
+  // ở các chỗ khác vẫn bình thường.
+  const handleDragStart = (
+    e: React.PointerEvent,
+    product: Product,
+    categoryName: string
+  ) => {
+    if (!dragEnabled) return;
+    // Chuột thì chỉ nhận nút trái; cảm ứng thì nhận mọi pointer.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const base = baseOrderForCategory(categoryName);
+    dragBaseRef.current = {
+      category: categoryName,
+      ids: base.map((p) => p.id),
+    };
+    setDragId(product.id);
+    setPreviewCategory(categoryName);
+    previewIdsRef.current = base.map((p) => p.id);
+    setPreviewIds(previewIdsRef.current);
+    document.body.style.cursor = 'grabbing';
+    document.body.style.userSelect = 'none';
+
+    const handleMove = (ev: PointerEvent) => {
+      const baseRef = dragBaseRef.current;
+      if (!baseRef) return;
+      // Tìm hàng đang ở dưới con trỏ (chuột hoặc ngón tay).
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const row = el?.closest?.('tr[data-product-id]') as HTMLElement | null;
+      if (!row) return;
+      const targetId = row.dataset.productId;
+      const targetCategory = row.dataset.category;
+      if (!targetId || targetCategory !== baseRef.category) return;
+      if (targetId === product.id) {
+        setDragOverId(targetId);
+        return;
+      }
+      setDragOverId(targetId);
+      const current = previewIdsRef.current || baseRef.ids;
+      if (!current.includes(targetId)) return;
+      const withoutDragged = current.filter((id) => id !== product.id);
+      let targetIndex = withoutDragged.indexOf(targetId);
+      // Con trỏ ở nửa dưới của hàng đích thì chèn sau hàng đó,
+      // nửa trên thì chèn trước hàng đó.
+      const rect = row.getBoundingClientRect();
+      if (ev.clientY > rect.top + rect.height / 2) {
+        targetIndex += 1;
+      }
+      withoutDragged.splice(targetIndex, 0, product.id);
+      // Tránh setState liên tục khi thứ tự không đổi.
+      if (withoutDragged.join(',') === current.join(',')) return;
+      previewIdsRef.current = withoutDragged;
+      setPreviewIds(withoutDragged);
+    };
+
+    const handleUp = () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', handleUp);
+      // endDrag đọc previewIds từ state nên phải chờ 1 nhịp render
+      // sau lần setPreviewIds cuối cùng; dùng setTimeout 0 để tránh
+      // lưu thứ tự của lần di chuyển chưa kịp cập nhật.
+      setTimeout(() => endDrag(), 0);
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointercancel', handleUp);
+  };
 
   const handleBuyNow = (product: Product) => {
     navigate(`/checkout/${product.id}`);
@@ -51,22 +173,51 @@ const ProductTable: React.FC<ProductTableProps> = ({
     return price_public;
   };
 
-  const renderProductRow = (product: Product, showNotes: boolean) => {
+  const renderProductRow = (
+    product: Product,
+    showNotes: boolean,
+    categoryName?: string
+  ) => {
     const inStock = product.in_stock !== false;
+    const rowCategory = categoryName || product.category || 'Khác';
+    const isDragging = dragId === product.id;
+    const isDragOver = dragOverId === product.id && !isDragging;
 
     return (
       <tr
         key={product.id}
+        data-product-id={product.id}
+        data-category={rowCategory}
         className="border-t border-gray-50 hover:bg-gray-50/30 transition-colors"
         style={{
-          boxShadow: '0 1px 6px 0 rgba(0,0,0,0.06)',
+          boxShadow: isDragOver
+            ? '0 -2px 0 0 #db2777 inset'
+            : '0 1px 6px 0 rgba(0,0,0,0.06)',
+          opacity: isDragging ? 0.5 : 1,
+          backgroundColor: isDragging ? '#fdf2f8' : undefined,
         }}
       >
         {showSortOrder && (
           <td className="px-6 py-4 text-center">
-            <span className="text-xs font-bold text-gray-400">
-              {product.sort_order || 0}
-            </span>
+            {dragEnabled ? (
+              <span className="inline-flex flex-col items-center gap-1">
+                <span
+                  onPointerDown={(e) => handleDragStart(e, product, rowCategory)}
+                  className="text-gray-400 hover:text-primary cursor-grab active:cursor-grabbing select-none leading-none text-base"
+                  style={{ touchAction: 'none' }}
+                  title="Nhấn giữ để kéo đổi thứ tự"
+                >
+                  ⋮⋮
+                </span>
+                <span className="text-xs font-bold text-gray-400">
+                  {product.sort_order || 0}
+                </span>
+              </span>
+            ) : (
+              <span className="text-xs font-bold text-gray-400">
+                {product.sort_order || 0}
+              </span>
+            )}
           </td>
         )}
         <td className="px-6 py-4">
@@ -191,14 +342,23 @@ const ProductTable: React.FC<ProductTableProps> = ({
         {isAdmin && (
           <td className="px-6 py-4 text-center">
             <div className="flex items-center justify-center gap-2">
-              <button 
+              <button
                 onClick={() => onEdit?.(product)}
                 className="w-9 h-9 flex items-center justify-center bg-yellow-50 text-yellow-600 rounded-xl hover:bg-yellow-100 transition-colors border border-yellow-100"
                 title="Sửa"
               >
                 ✏️
               </button>
-              <button 
+              {onDuplicate && (
+                <button
+                  onClick={() => onDuplicate(product)}
+                  className="w-9 h-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors border border-blue-100"
+                  title="Nhân bản (tạo bản sao ngay sau sản phẩm này, giữ nguyên ảnh)"
+                >
+                  📋
+                </button>
+              )}
+              <button
                 onClick={() => onDelete?.(product.id)}
                 className="w-9 h-9 flex items-center justify-center bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
                 title="Xóa"
@@ -256,12 +416,30 @@ const ProductTable: React.FC<ProductTableProps> = ({
 
     return (
       <div className="w-full space-y-8">
+        {dragEnabled && (
+          <p className="text-xs text-gray-500 bg-white/70 border border-pink-100 rounded-2xl px-4 py-3">
+            💡 <strong>Nhấn giữ ⋮⋮ ở cột STT rồi kéo lên/xuống</strong> để đổi thứ tự
+            trong cùng danh mục, thả tay là tự lưu. Nút 📋 là nhân bản sản phẩm.
+          </p>
+        )}
         {sortedCategoryKeys.map((categoryName) => {
           const catProducts = grouped[categoryName];
+          // Ở bảng quản trị có kéo-thả thì xếp đúng theo sort_order để
+          // thứ tự kéo là thứ tự thật; không có kéo-thả thì giữ luật
+          // cũ (HOT lên đầu rồi mới tới sort_order).
           const sortedCatProducts = [...catProducts].sort((a: any, b: any) => {
+            if (onReorder) return (a.sort_order || 0) - (b.sort_order || 0);
             if (b.is_hot === a.is_hot) return (a.sort_order || 0) - (b.sort_order || 0);
             return b.is_hot ? 1 : -1;
           });
+
+          // Khi đang kéo, hiển thị thứ tự xem trước thay vì thứ tự gốc.
+          const displayedCatProducts =
+            dragEnabled && previewCategory === categoryName && previewIds
+              ? previewIds
+                  .map((id) => sortedCatProducts.find((p) => p.id === id))
+                  .filter((p): p is Product => !!p)
+              : sortedCatProducts;
 
           // Chỉ hiện cột ghi chú nếu ít nhất 1 sản phẩm trong nhóm có ghi chú
           const hasNotes = sortedCatProducts.some(p => p.notes && p.notes.trim() !== '');
@@ -290,7 +468,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                 <table className="w-full text-left border-collapse">
                   {renderTableHeader(hasNotes, true)}
                   <tbody className="font-body">
-                    {sortedCatProducts.map((product) => renderProductRow(product, hasNotes))}
+                    {displayedCatProducts.map((product) => renderProductRow(product, hasNotes, categoryName))}
                   </tbody>
                 </table>
               </div>
