@@ -86,16 +86,16 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, checkoutShopS
       <header className="w-full max-w-7xl px-4 py-3 flex justify-between items-center z-10 shrink-0">
         {/* Left: Logo */}
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-          <span className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center shadow-md shrink-0">
+          <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-pink-500 via-fuchsia-500 to-violet-500 flex items-center justify-center shadow-md shadow-pink-200 shrink-0">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 7h12l1.5 13.5a1 1 0 0 1-1 1.5H5.5a1 1 0 0 1-1-1.5z" />
               <path d="M9 10V6a3 3 0 0 1 6 0v4" />
             </svg>
           </span>
-          <h1 className="text-3xl font-cute font-bold text-slate-900 hidden sm:block">
+          <h1 className="text-3xl font-cute font-bold text-primary drop-shadow-sm hidden sm:block">
             Studytimeless
           </h1>
-          <h1 className="text-3xl font-cute font-bold text-slate-900 sm:hidden">
+          <h1 className="text-3xl font-cute font-bold text-primary drop-shadow-sm sm:hidden">
             Shop
           </h1>
         </div>
