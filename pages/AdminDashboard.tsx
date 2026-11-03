@@ -13,6 +13,7 @@ import {
   productsOfShop,
   copyMainProductsToShop,
   fanOutNewMainProduct,
+  getShopSettings,
 } from '../utils/shop';
 
 interface Props {
@@ -153,6 +154,19 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
 
   const fetchSettings = async () => {
     try {
+      // Shop phụ: nếu đã có cài đặt riêng thì dùng cài đặt riêng,
+      // chưa có thì dùng cài đặt của shop chính làm điểm bắt đầu
+      // (để shop mới vẫn bán được ngay, sửa và Lưu 1 lần là tách
+      // riêng, xem getShopSettings trong utils/shop.ts).
+      if (isSubShop && shopSlug) {
+        const shopSettings = await getShopSettings(shopSlug);
+        if (shopSettings && (shopSettings.payment_methods || shopSettings.categories)) {
+          if (shopSettings.payment_methods) setPaymentMethods(shopSettings.payment_methods);
+          if (shopSettings.categories) setCategories(shopSettings.categories);
+          return;
+        }
+        // Chưa có cài đặt riêng: rơi xuống dưới để tải của chính.
+      }
       const docRef = doc(db, 'app_settings', '1');
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
@@ -321,6 +335,13 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
         const batch = writeBatch(db);
         prodSnap.docs.forEach((d) => batch.update(doc(db, 'products', d.id), { shop_slug: newSlug }));
         await batch.commit();
+        // Đổi mã link thì dời luôn cài đặt riêng của shop (nếu
+        // đã có) sang mã mới, không thì cài đặt riêng bị mất.
+        const oldSettings = await getShopSettings(oldSlug);
+        if (oldSettings) {
+          await setDoc(doc(db, 'shop_settings', newSlug), oldSettings, { merge: true });
+          await deleteDoc(doc(db, 'shop_settings', oldSlug));
+        }
       }
       alert('Đã lưu shop phụ.');
       fetchSubadmins();
@@ -338,6 +359,11 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
       prodSnap.docs.forEach((d) => batch.delete(doc(db, 'products', d.id)));
       await batch.commit();
       await deleteDoc(doc(db, 'users', sub.id));
+      // Xóa luôn cài đặt riêng của shop đó (nếu đã có), tránh
+      // để lại cài đặt mồ côi cho 1 shop không còn tồn tại.
+      if (sub.shop_slug) {
+        try { await deleteDoc(doc(db, 'shop_settings', sub.shop_slug)); } catch {}
+      }
       alert('Đã xóa admin phụ và sản phẩm của shop đó.');
       fetchSubadmins();
     } catch (err: any) {
@@ -493,12 +519,23 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     try {
-      await setDoc(doc(db, 'app_settings', '1'), { 
-        ctv_page_content: ctvPageContent,
-        payment_methods: paymentMethods,
-        categories: categories
-      }, { merge: true });
-      alert('Đã lưu cài đặt!');
+      if (isSubShop && shopSlug) {
+        // Lưu cài đặt RIÊNG của shop phụ, không động tới
+        // app_settings của shop chính. Không lưu nội dung CTV
+        // (đó là cài đặt riêng của shop chính).
+        await setDoc(doc(db, 'shop_settings', shopSlug), {
+          payment_methods: paymentMethods,
+          categories: categories,
+        }, { merge: true });
+        alert('Đã lưu cài đặt riêng của shop! Từ giờ shop này dùng phương thức thanh toán và danh mục riêng, không ảnh hưởng shop chính.');
+      } else {
+        await setDoc(doc(db, 'app_settings', '1'), {
+          ctv_page_content: ctvPageContent,
+          payment_methods: paymentMethods,
+          categories: categories
+        }, { merge: true });
+        alert('Đã lưu cài đặt!');
+      }
     } catch (err) {
       console.error('Save settings error:', err);
       alert('Lỗi khi lưu cài đặt!');
@@ -648,6 +685,15 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
             >
               📦 Sản phẩm
             </button>
+            {/* Shop phụ cũng có tab Cài đặt riêng (phương thức
+                thanh toán + danh mục của shop mình), nhưng không
+                có tab CTV và tab Admin phụ. */}
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'settings' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
+            >
+              ⚙️ Cài đặt
+            </button>
             {!isSubShop && (
               <>
                 <button
@@ -655,12 +701,6 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
                   className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'ctvs' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
                 >
                   👥 CTV
-                </button>
-                <button
-                  onClick={() => setActiveTab('settings')}
-                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'settings' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
-                >
-                  ⚙️ Cài đặt
                 </button>
                 <button
                   onClick={() => setActiveTab('subadmins')}
@@ -992,6 +1032,15 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
         {activeTab === 'settings' && (
           <div className="space-y-8">
 
+            {isSubShop && (
+              <div className="bg-pink-50 border border-pink-100 p-5 rounded-[24px] text-sm text-gray-600 leading-relaxed">
+                <strong className="text-primary">Cài đặt riêng của shop {user.shop_name || shopSlug}:</strong> phương
+                thức thanh toán và danh mục ở đây chỉ áp dụng cho shop này, không ảnh hưởng shop chính.
+                Lần đầu chưa lưu thì shop đang dùng cài đặt của shop chính, bạn sửa rồi bấm
+                <strong> Lưu tất cả cài đặt</strong> ở cuối trang 1 lần là từ đó tách riêng hẳn.
+              </div>
+            )}
+
             {/* ===== QUẢN LÝ DANH MỤC ===== */}
             <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl">
               <h3 className="text-2xl font-cute font-bold text-primary mb-2">Quản lý danh mục 🗂️</h3>
@@ -1173,22 +1222,24 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
               </div>
             </div>
 
-            {/* CTV Content */}
-            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl">
-              <h3 className="text-2xl font-cute font-bold text-primary mb-6">Cài đặt trang Cộng tác viên 📝</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">Nội dung hiển thị cho CTV</label>
-                  <textarea 
-                    value={ctvPageContent}
-                    onChange={(e) => setCtvPageContent(e.target.value)}
-                    rows={6}
-                    placeholder="Nhập thông báo, hướng dẫn hoặc nội dung dành riêng cho CTV..."
-                    className="w-full px-6 py-4 rounded-3xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
-                  />
+            {/* CTV Content — chỉ shop chính, shop phụ không có */}
+            {!isSubShop && (
+              <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl">
+                <h3 className="text-2xl font-cute font-bold text-primary mb-6">Cài đặt trang Cộng tác viên 📝</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">Nội dung hiển thị cho CTV</label>
+                    <textarea
+                      value={ctvPageContent}
+                      onChange={(e) => setCtvPageContent(e.target.value)}
+                      rows={6}
+                      placeholder="Nhập thông báo, hướng dẫn hoặc nội dung dành riêng cho CTV..."
+                      className="w-full px-6 py-4 rounded-3xl border-2 border-pink-50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Payment Methods */}
             <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl">
