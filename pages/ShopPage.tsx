@@ -30,6 +30,19 @@ const ShopPage: React.FC<Props> = ({ user }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryInfo, setCategoryInfo] = useState<Record<string, { icon: string; desc: string; color: string }>>(DEFAULT_CATEGORY_INFO);
   const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
+  // Phân trang giống trang chủ chính: mỗi danh mục hiện 6 sản
+  // phẩm đầu, bấm Xem thêm thì thêm 5, thay vì hiện hết sạch
+  // 1 lần như trước.
+  const INITIAL_SHOW = 6;
+  const LOAD_MORE_STEP = 5;
+  const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
+  const getVisibleCount = (category: string) => visibleCounts[category] ?? INITIAL_SHOW;
+  const handleLoadMore = (category: string) => {
+    setVisibleCounts((prev) => ({
+      ...prev,
+      [category]: (prev[category] ?? INITIAL_SHOW) + LOAD_MORE_STEP,
+    }));
+  };
 
   const isOwner = user?.role === 'subadmin' && user.shop_slug === shopSlug;
 
@@ -208,6 +221,10 @@ const ShopPage: React.FC<Props> = ({ user }) => {
           sortedCategories.map((category) => {
             const catProducts = grouped[category];
             const info = categoryInfo[category];
+            const visibleCount = getVisibleCount(category);
+            const displayedProducts = catProducts.slice(0, visibleCount);
+            const remaining = catProducts.length - visibleCount;
+            const hasMore = remaining > 0;
             return (
               <div key={category} className="space-y-8">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -220,7 +237,25 @@ const ShopPage: React.FC<Props> = ({ user }) => {
                   </div>
                   <div className="text-gray-300 font-mono text-sm hidden md:block">{catProducts.length} items</div>
                 </div>
-                <ProductTable products={catProducts} user={user} />
+                <ProductTable products={displayedProducts} user={user} />
+
+                {hasMore && (
+                  <div className="flex flex-col items-center gap-2 pt-2">
+                    <button
+                      onClick={() => handleLoadMore(category)}
+                      className="group flex items-center gap-3 bg-white hover:bg-primary border-2 border-primary text-primary hover:text-white px-8 py-3 rounded-2xl font-bold text-sm transition-all shadow-sm hover:shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5 active:scale-95"
+                    >
+                      <span className="text-base group-hover:rotate-180 transition-transform duration-300">⬇️</span>
+                      Xem thêm {Math.min(remaining, LOAD_MORE_STEP)} sản phẩm
+                      <span className="bg-primary/10 group-hover:bg-white/20 text-primary group-hover:text-white text-xs font-black px-2 py-0.5 rounded-full transition-colors">
+                        còn {remaining}
+                      </span>
+                    </button>
+                    <p className="text-xs text-gray-300">
+                      Đang hiển thị {displayedProducts.length} / {catProducts.length} sản phẩm
+                    </p>
+                  </div>
+                )}
               </div>
             );
           })
