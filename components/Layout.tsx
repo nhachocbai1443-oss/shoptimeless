@@ -23,6 +23,19 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, checkoutShopS
   // link thật theo shop đang xem (xem useEffect dưới).
   const [contactLinks, setContactLinks] = useState<ContactLinks>(DEFAULT_CONTACT_LINKS);
 
+  // Shop mà khách đang xem (để nút Đăng nhập nhớ mà đưa về lại
+  // đúng shop đó sau khi đăng nhập, thay vì về trang chủ chính):
+  // đường link /{slug} hoặc /{slug}/admin/... là shop phụ, trang
+  // checkout thì dùng mã shop của sản phẩm đang checkout mà App
+  // truyền vào (route checkout không chứa mã shop).
+  const firstSegment = location.pathname.replace(/^\//, '').split('/')[0] || '';
+  const currentShopSlug =
+    firstSegment === 'checkout'
+      ? checkoutShopSlug || null
+      : firstSegment && !RESERVED_SLUGS.includes(firstSegment) && firstSegment !== 'product'
+        ? firstSegment
+        : null;
+
   useEffect(() => {
     const loadContactLinks = async () => {
       try {
@@ -111,8 +124,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, checkoutShopS
               </div>
             ) : (
               <div className="flex flex-col items-end gap-1">
-                <Link 
-                  to="/login" 
+                <Link
+                  to="/login"
+                  state={currentShopSlug ? { returnShop: currentShopSlug } : undefined}
                   className="bg-primary hover:bg-pink-700 text-white px-6 py-2.5 rounded-2xl text-sm font-bold transition shadow-md flex items-center gap-2"
                 >
                   🔑 Đăng nhập
