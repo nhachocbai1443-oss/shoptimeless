@@ -179,6 +179,108 @@ export const sendEmailNotification = async (
 };
 
 // ============================================================
+// EMAIL GIAO HÀNG CHO KHÁCH (admin bấm gửi tay ở tab Đơn hàng)
+// ============================================================
+// Khác với email thông báo cho admin ở trên, email này gửi cho
+// KHÁCH (địa chỉ khách nhập lúc đặt đơn) và chỉ gửi khi admin
+// nhập nội dung giao hàng rồi bấm gửi — không tự gửi lúc đặt đơn.
+// Vì vậy nó cần 1 template EmailJS RIÊNG cho khách (không dùng
+// chung template thông báo cho admin, vì nội dung khác hẳn):
+// - Biến môi trường mới: VITE_EMAILJS_DELIVERY_TEMPLATE_ID
+//   (Service ID và Public Key dùng chung với template cũ).
+// - Trong EmailJS, tạo template mới, đặt ô "To Email" là
+//   {{to_email}} để email đi đúng tới khách của từng đơn.
+// - Tiêu đề template gợi ý (dán nguyên vào ô Subject):
+//   🎉 Đơn hàng #{{order_id}} đã được xử lý thành công!
+// - Nội dung template gợi ý (dán vào ô Content, thứ tự đúng
+//   như bạn dặn: lời chúc mừng + nội dung giao hàng ở TRÊN,
+//   thông tin đơn hàng ở DƯỚI):
+//   Xin chào {{full_name}},
+//   Đơn hàng #{{order_id}} của Quý khách đã được xử lý thành công!
+//   🎁 NỘI DUNG GIAO HÀNG:
+//   {{delivery_info}}
+//   ─────────────────
+//   THÔNG TIN ĐƠN HÀNG:
+//   Sản phẩm: {{product_name}} ({{variant_form}} x {{quantity}})
+//   Tổng tiền: {{total_price}}
+//   Thanh toán: {{payment_method}}
+//   Shop: {{shop_name}}
+//   (Các biến {{...}} ở trên chính là template_params dưới đây.)
+export interface DeliveryEmailData {
+  orderId: string;
+  productName: string;
+  variantForm: string;
+  quantity: number;
+  totalPrice: number;
+  fullName: string;
+  customerEmail: string;
+  paymentMethod: string;
+  shopName: string;
+  orderTime?: any;
+}
+
+export const sendDeliveryEmail = async (
+  order: DeliveryEmailData,
+  deliveryInfo: string
+): Promise<void> => {
+  const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+  const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+  const templateId = import.meta.env.VITE_EMAILJS_DELIVERY_TEMPLATE_ID;
+
+  if (!serviceId || !publicKey) {
+    throw new Error('Chưa cấu hình EmailJS (thiếu VITE_EMAILJS_SERVICE_ID hoặc VITE_EMAILJS_PUBLIC_KEY).');
+  }
+  if (!templateId) {
+    throw new Error('Chưa cấu hình template giao hàng: thêm VITE_EMAILJS_DELIVERY_TEMPLATE_ID vào Vercel rồi deploy lại.');
+  }
+  if (!order.customerEmail?.trim()) {
+    throw new Error('Đơn này không có email của khách nên không gửi được.');
+  }
+  if (!deliveryInfo.trim()) {
+    throw new Error('Chưa nhập nội dung giao hàng (tài khoản / mật khẩu).');
+  }
+
+  let orderTime = '';
+  try {
+    if (order.orderTime?.toDate) orderTime = order.orderTime.toDate().toLocaleString('vi-VN');
+    else {
+      const d = new Date(order.orderTime);
+      orderTime = isNaN(d.getTime()) ? '' : d.toLocaleString('vi-VN');
+    }
+  } catch {
+    orderTime = '';
+  }
+
+  const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      service_id: serviceId,
+      template_id: templateId,
+      user_id: publicKey,
+      template_params: {
+        to_email: order.customerEmail.trim(),
+        order_id: order.orderId,
+        product_name: order.productName,
+        variant_form: order.variantForm,
+        quantity: order.quantity,
+        total_price: `${order.totalPrice.toLocaleString('vi-VN')}đ`,
+        full_name: order.fullName,
+        customer_email: order.customerEmail,
+        payment_method: order.paymentMethod,
+        delivery_info: deliveryInfo.trim(),
+        shop_name: order.shopName,
+        order_time: orderTime,
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`EmailJS báo lỗi: ${await response.text()}`);
+  }
+};
+
+// ============================================================
 // HÀM TỔNG HỢP: Gửi tất cả thông báo cùng lúc
 // routing:
 // - sendTelegram: true = gửi lên luồng Telegram chung (mặc định
