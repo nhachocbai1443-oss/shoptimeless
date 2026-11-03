@@ -8,9 +8,12 @@ import { getShopSettings } from '../utils/shop';
 
 interface Props {
   user: User | null;
+  // Báo cho App biết sản phẩm này thuộc shop nào, để nút liên
+  // hệ nổi ở Layout hiện đúng link của shop đó.
+  onProductShopSlug?: (slug: string | null) => void;
 }
 
-const CheckoutPage: React.FC<Props> = ({ user }) => {
+const CheckoutPage: React.FC<Props> = ({ user, onProductShopSlug }) => {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
@@ -47,9 +50,11 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
         let productData: any = null;
         if (!pDocSnap.exists()) {
           setProduct(null);
+          onProductShopSlug?.(null);
         } else {
           productData = { id: pDocSnap.id, ...pDocSnap.data() } as any;
           setProduct(productData);
+          onProductShopSlug?.(productData.shop_slug || null);
         }
 
         // Fetch Settings: đơn ở shop phụ dùng phương thức thanh
