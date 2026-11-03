@@ -4,6 +4,7 @@ import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { User } from '../types';
 import { RESERVED_SLUGS, getShopSettings, DEFAULT_CONTACT_LINKS, ContactLinks } from '../utils/shop';
+import FallingEffect from './FallingEffect';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -78,6 +79,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, checkoutShopS
 
   return (
     <div className="min-h-screen flex flex-col items-center relative">
+      {/* Hiệu ứng rơi toàn web (cánh hoa + tia sáng), chỉ trang trí,
+          không chặn bấm, không đổi cấu trúc hay vị trí các khối. */}
+      <FallingEffect />
       {/* Header */}
       <header className="w-full max-w-7xl px-4 py-3 flex justify-between items-center z-10 shrink-0">
         {/* Left: Logo */}
