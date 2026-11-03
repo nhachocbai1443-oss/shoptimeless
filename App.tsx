@@ -231,7 +231,18 @@ function App() {
     <HashRouter>
       <Layout user={user} onLogout={handleLogout}>
         <Routes>
-          <Route path="/" element={<Home user={user} />} />
+          {/* Mở link gốc mà đang đăng nhập sẵn admin thì tự chuyển
+              thẳng sang trang Quản lý, khỏi phải bấm Quản lý hay
+              đăng xuất đăng nhập lại. Khách và CTV vẫn vào trang
+              chủ bình thường (có nút Mua ngay) như cũ. */}
+          <Route
+            path="/"
+            element={
+              user && user.role === 'admin'
+                ? <Navigate to="/admin" replace />
+                : <Home user={user} />
+            }
+          />
 
           <Route
             path="/login"
