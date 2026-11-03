@@ -319,13 +319,19 @@ function App() {
           <Route path="/:shopSlug/admin" element={<ShopAdminPage user={user} />} />
           <Route path="/:shopSlug/admin/product/:productId" element={<ShopProductFormPage user={user} />} />
 
+          {/* Trang đăng nhập KHÔNG được chặn kiểu "đã đăng nhập
+              thì đẩy về /" ở đây nữa. Lần trước chính cái chặn này
+              gây lỗi: CTV đăng nhập từ shop phụ, Login vừa điều
+              hướng về link shop phụ thì App render lại, thấy user
+              đã có là đẩy tiếp về '/', và '/' với CTV lại là trang
+              chủ chính — nên cứ bấm đăng nhập ở link shop phụ là
+              lại về link gốc. Việc "đã đăng nhập mà vào /login thì
+              đi đâu" giờ do chính Login.tsx xử lý (xem useEffect
+              ở đó), với cùng luật đích đến, không còn 2 lệnh điều
+              hướng giành nhau nữa. */}
           <Route
             path="/login"
-            element={
-              user
-                ? <Navigate to="/" replace />
-                : <Login onLogin={handleLogin} />
-            }
+            element={<Login onLogin={handleLogin} user={user} />}
           />
 
           <Route
