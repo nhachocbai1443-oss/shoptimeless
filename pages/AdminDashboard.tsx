@@ -913,8 +913,8 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
                 "Giao hàng" ở 1 đơn. Email chỉ gửi khi bấm nút
                 gửi trong popup này, không tự gửi lúc đặt đơn. */}
             {deliveryOrder && (
-              <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !sendingDelivery && setDeliveryOrder(null)}></div>
+              <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-8 overflow-y-auto">
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !sendingDelivery && setDeliveryOrder(null)}></div>
                 <div className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-lg p-8 space-y-4 animate-fade-in max-h-[90vh] overflow-y-auto">
                   <h3 className="text-xl font-cute font-bold text-gray-800">📦 Giao hàng cho khách</h3>
                   <div className="bg-gray-50 rounded-2xl p-4 text-sm space-y-1">
