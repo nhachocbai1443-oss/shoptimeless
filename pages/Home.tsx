@@ -41,7 +41,12 @@ const Home: React.FC<Props> = ({ user }) => {
       );
       const querySnapshot = await getDocs(q);
       const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-      const sorted = data.sort((a: any, b: any) => {
+      // Trang chủ chính CHỈ hiện sản phẩm của shop chính (không
+      // gắn mã shop). Trước đây không lọc nên sản phẩm shop phụ
+      // (đã sao chép từ chính sang) cũng hiện ở đây, làm mỗi sản
+      // phẩm xuất hiện 2 lần và số items tăng gấp đôi (22 -> 44).
+      const mains = data.filter((p: any) => !p.shop_slug);
+      const sorted = mains.sort((a: any, b: any) => {
         if (b.is_hot === a.is_hot) return (a.sort_order || 0) - (b.sort_order || 0);
         return b.is_hot ? 1 : -1;
       });
@@ -51,7 +56,7 @@ const Home: React.FC<Props> = ({ user }) => {
       try {
         const fallbackSnap = await getDocs(collection(db, 'products'));
         const fallbackData = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-        setProducts(fallbackData || []);
+        setProducts((fallbackData || []).filter((p: any) => !p.shop_slug));
       } catch (fallbackErr) {
         console.error('Fallback fetch also failed:', fallbackErr);
       }
@@ -101,6 +106,9 @@ const Home: React.FC<Props> = ({ user }) => {
   };
 
   const filteredProducts = products.filter(p => {
+    // Phòng hờ: dù fetch có lọt sản phẩm shop phụ vào thì trang
+    // chủ chính cũng không hiện nó, chỉ hiện sản phẩm chính.
+    if ((p as any).shop_slug) return false;
     // Sản phẩm đang ẩn thì khách và CTV không thấy ở trang chủ;
     // chỉ admin (đang xem để kiểm tra) mới thấy.
     if (user?.role !== 'admin' && p.is_hidden) return false;
