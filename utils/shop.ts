@@ -1,6 +1,6 @@
 import { db } from '../firebase';
-import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
-import { Product, User } from '../types';
+import { collection, getDocs, query, where, addDoc, doc, getDoc } from 'firebase/firestore';
+import { Product, User, Category } from '../types';
 
 // ---------------------------------------------------------------------------
 // Shop phụ (subadmin) — luật đã chốt với bạn:
@@ -88,6 +88,29 @@ export const copyMainProductsToShop = async (slug: string): Promise<number> => {
     }
   }
   return copied;
+};
+
+// Cài đặt riêng của shop phụ: phương thức thanh toán + danh mục.
+// Lưu ở collection 'shop_settings', document id = mã shop.
+// - Chưa có document này thì shop phụ dùng cài đặt của shop chính
+//   (để shop mới vẫn bán được ngay, không cần cài đặt lại).
+// - Admin phụ bấm Lưu ở tab Cài đặt của shop mình 1 lần là tạo
+//   document riêng, từ đó sửa gì cũng không ảnh hưởng shop chính,
+//   và shop chính sửa sau cũng không ảnh hưởng shop phụ này nữa.
+export interface ShopSettings {
+  payment_methods?: any[];
+  categories?: Category[];
+}
+
+export const getShopSettings = async (slug: string): Promise<ShopSettings | null> => {
+  try {
+    const snap = await getDoc(doc(db, 'shop_settings', slug));
+    if (!snap.exists()) return null;
+    return snap.data() as ShopSettings;
+  } catch (err) {
+    console.error('Error loading shop settings:', err);
+    return null;
+  }
 };
 
 // Admin chính thêm MỚI sản phẩm: sao chép sản phẩm đó sang tất cả
