@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 import { Product, User, Category } from '../types';
 import ProductTable from '../components/ProductTable';
-import { RESERVED_SLUGS } from '../utils/shop';
+import { RESERVED_SLUGS, getShopSettings } from '../utils/shop';
 
 interface Props {
   user: User | null;
@@ -92,9 +92,19 @@ const ShopPage: React.FC<Props> = ({ user }) => {
           });
         setProducts(mine);
 
-        const settingsSnap = await getDoc(doc(db, 'app_settings', '1'));
-        if (settingsSnap.exists() && settingsSnap.data().categories?.length > 0) {
-          const cats: Category[] = settingsSnap.data().categories;
+        // Danh mục: shop phụ dùng danh mục riêng nếu đã lưu cài
+        // đặt riêng, chưa lưu thì dùng danh mục của shop chính.
+        let shopCats: Category[] | undefined;
+        const shopSettings = await getShopSettings(shopSlug);
+        if (shopSettings?.categories?.length) shopCats = shopSettings.categories;
+        if (!shopCats) {
+          const settingsSnap = await getDoc(doc(db, 'app_settings', '1'));
+          if (settingsSnap.exists() && settingsSnap.data().categories?.length > 0) {
+            shopCats = settingsSnap.data().categories;
+          }
+        }
+        if (shopCats && shopCats.length > 0) {
+          const cats: Category[] = shopCats;
           const sorted = [...cats].sort((a, b) => a.sort_order - b.sort_order);
           const infoMap: Record<string, { icon: string; desc: string; color: string }> = {};
           const orderArr: string[] = [];
