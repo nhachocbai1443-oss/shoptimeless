@@ -14,6 +14,10 @@ const Login: React.FC<Props> = ({ onLogin }) => {
     onLogin(user);
     if (user.role === 'admin') {
       navigate('/admin');
+    } else if (user.role === 'subadmin' && user.shop_slug) {
+      // Admin phụ đăng nhập ở đâu cũng về trang quản lý của shop
+      // mình, không vào trang admin chính.
+      navigate(`/${user.shop_slug}/admin`);
     } else {
       navigate('/');
     }
