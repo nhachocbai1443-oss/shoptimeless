@@ -4,9 +4,13 @@ import { db } from '../firebase';
 import { collection, doc, getDoc, addDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { uploadImageToSupabase } from '../supabase';
 import { Product, User, Category } from '../types';
+import { fanOutNewMainProduct } from '../utils/shop';
 
 interface Props {
   user: User;
+  // Không truyền = form của admin chính. Truyền mã shop = form
+  // của shop phụ đó (chỉ admin phụ sở hữu shop đó dùng được).
+  shopSlug?: string;
 }
 
 // Danh mục mặc định (fallback khi Firestore chưa có dữ liệu)
@@ -17,10 +21,12 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: '4', name: 'GIẢI TRÍ NGHE NHẠC', icon: '🎵', desc: '', color: 'from-purple-500 to-pink-600', sort_order: 4 },
 ];
 
-const ProductFormPage: React.FC<Props> = ({ user }) => {
+const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
   const navigate = useNavigate();
   const { productId } = useParams<{ productId: string }>();
   const isEdit = productId && productId !== 'new';
+  const isSubShop = !!shopSlug;
+  const backPath = isSubShop ? `/${shopSlug}/admin` : '/admin';
 
   const [uploading, setUploading] = useState(false);
   const [uploadingNote, setUploadingNote] = useState(false);
@@ -69,7 +75,14 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
   }, []);
 
   useEffect(() => {
-    if (user.role !== 'admin') {
+    if (isSubShop) {
+      // Form shop phụ: chỉ admin phụ sở hữu đúng shop đó mới
+      // được sửa, và chỉ được sửa sản phẩm của chính shop đó.
+      if (user.role !== 'subadmin' || user.shop_slug !== shopSlug) {
+        navigate(`/${shopSlug}`);
+        return;
+      }
+    } else if (user.role !== 'admin') {
       navigate('/');
       return;
     }
@@ -78,7 +91,16 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
       getDoc(doc(db, 'products', productId!))
         .then(snap => {
           if (snap.exists()) {
-            setForm({ id: snap.id, ...snap.data() } as any);
+            const data = snap.data() as any;
+            const productShop = data.shop_slug || null;
+            const expectedShop = isSubShop ? shopSlug : null;
+            if (productShop !== expectedShop) {
+              // Cố sửa sản phẩm của shop khác thì đẩy về trang
+              // quản lý của shop mình, không cho xem form.
+              navigate(backPath);
+              return;
+            }
+            setForm({ id: snap.id, ...data } as any);
           }
         })
         .catch(err => console.error(err))
@@ -235,15 +257,29 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
       productData.form = productData.form || '';
       productData.package = productData.package || '';
       productData.category = productData.category || categories[0]?.name || DEFAULT_CATEGORIES[0].name;
+      // Gắn mã shop: form shop phụ thì gắn mã shop đó, form chính
+      // thì bỏ mã shop (sản phẩm chính). Nhờ vậy admin phụ sửa
+      // ở đây không bao giờ ghi đè lên sản phẩm chính.
+      if (isSubShop) {
+        productData.shop_slug = shopSlug;
+      } else {
+        delete productData.shop_slug;
+      }
 
       if (isEdit) {
         await updateDoc(doc(db, 'products', productId!), productData);
         alert('Đã cập nhật sản phẩm thành công!');
       } else {
         await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
+        // Admin chính thêm MỚI thì tự sao chép sang các shop phụ.
+        // Admin phụ thêm mới, và cả 2 bên sửa sản phẩm cũ, thì
+        // không sao chép đi đâu cả.
+        if (!isSubShop) {
+          await fanOutNewMainProduct(productData);
+        }
         alert('Đã thêm sản phẩm mới thành công!');
       }
-      navigate('/admin');
+      navigate(backPath);
     } catch (err: any) {
       if (err.code === 'permission-denied') {
         // Thử làm mới session rồi lưu lại
@@ -281,15 +317,23 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
             productData.form = productData.form || '';
             productData.package = productData.package || '';
             productData.category = productData.category || categories[0]?.name || DEFAULT_CATEGORIES[0].name;
+            if (isSubShop) {
+              productData.shop_slug = shopSlug;
+            } else {
+              delete productData.shop_slug;
+            }
 
             if (isEdit) {
               await updateDoc(doc(db, 'products', productId!), productData);
               alert('Đã cập nhật sản phẩm thành công!');
             } else {
               await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
+              if (!isSubShop) {
+                await fanOutNewMainProduct(productData);
+              }
               alert('Đã thêm sản phẩm mới thành công!');
             }
-            navigate('/admin');
+            navigate(backPath);
             return;
           } catch (retryErr: any) {
             alert(`Lỗi khi lưu sản phẩm: ${retryErr.message || JSON.stringify(retryErr)}`);
@@ -320,7 +364,7 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
         <div className="flex items-center gap-4 mb-8">
           <button
             type="button"
-            onClick={() => navigate('/admin')}
+            onClick={() => navigate(backPath)}
             className="flex items-center gap-2 px-5 py-2.5 bg-white rounded-2xl shadow-sm border border-gray-100 text-gray-600 font-bold hover:text-primary hover:border-primary transition-all group"
           >
             <span className="group-hover:-translate-x-1 transition-transform">⬅️</span> Quay lại
@@ -627,7 +671,7 @@ const ProductFormPage: React.FC<Props> = ({ user }) => {
           <div className="flex justify-end gap-3 pt-4 border-t-2 border-pink-50">
             <button
               type="button"
-              onClick={() => navigate('/admin')}
+              onClick={() => navigate(backPath)}
               className="px-6 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-100 transition-all border-2 border-transparent"
             >
               Hủy
