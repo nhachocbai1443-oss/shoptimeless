@@ -156,7 +156,7 @@ const Home: React.FC<Props> = ({ user }) => {
       {/* Compact Header Section */}
       <div className="w-full max-w-6xl px-4 mb-8 flex flex-col md:flex-row items-center justify-between gap-6 border-b border-slate-200 pb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white shadow-lg shadow-slate-900/20">
+          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.4-6.3-4.6-6.3 4.6L8 13.6 2 9.2h7.6z" />
             </svg>
