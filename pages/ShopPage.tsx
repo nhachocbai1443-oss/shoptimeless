@@ -24,6 +24,7 @@ const ShopPage: React.FC<Props> = ({ user }) => {
   const { shopSlug } = useParams<{ shopSlug: string }>();
   const [shop, setShop] = useState<User | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,8 +78,15 @@ const ShopPage: React.FC<Props> = ({ user }) => {
           setCategoryInfo(infoMap);
           setCategoryOrder(orderArr);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error loading shop:', err);
+        // Trước đây lỗi tải (mạng, quyền Firestore, thiếu index)
+        // không đặt cờ notFound, lại thêm chỗ render dùng trực
+        // tiếp p.name/p.category nên 1 sản phẩm thiếu field là cả
+        // trang crash trắng. Giờ lỗi nào cũng hiện thành thông báo
+        // rõ ràng, không bao giờ để trang trắng.
+        setLoadError(err?.message || 'Không tải được shop.');
+        setNotFound(true);
       } finally {
         setLoading(false);
       }
@@ -99,8 +107,18 @@ const ShopPage: React.FC<Props> = ({ user }) => {
     return (
       <div className="text-center py-32 bg-white rounded-[40px] border-2 border-dashed border-gray-100">
         <div className="text-6xl mb-6">🏜️</div>
-        <h3 className="text-2xl font-cute font-bold text-gray-800 mb-2">Không có shop nào mang mã “{shopSlug}”</h3>
-        <p className="text-gray-400">Kiểm tra lại link shop bạn nhận được nhé.</p>
+        <h3 className="text-2xl font-cute font-bold text-gray-800 mb-2">Không mở được shop mang mã “{shopSlug}”</h3>
+        <p className="text-gray-400">
+          {loadError
+            ? `Lỗi tải shop: ${loadError} — thử tải lại trang, hoặc kiểm tra lại link shop.`
+            : 'Kiểm tra lại link shop bạn nhận được nhé.'}
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-6 mr-4 bg-primary text-white px-6 py-3 rounded-2xl font-bold shadow-md"
+        >
+          🔄 Tải lại trang
+        </button>
         <Link to="/" className="mt-6 inline-block text-primary font-bold hover:underline">
           Về trang chủ chính
         </Link>
@@ -112,8 +130,8 @@ const ShopPage: React.FC<Props> = ({ user }) => {
   const filtered = products.filter((p) => {
     if (!q) return true;
     return (
-      p.name.toLowerCase().includes(q) ||
-      p.category.toLowerCase().includes(q) ||
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.category || '').toLowerCase().includes(q) ||
       (p.notes || '').toLowerCase().includes(q)
     );
   });
