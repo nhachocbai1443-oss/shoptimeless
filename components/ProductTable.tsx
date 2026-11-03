@@ -448,7 +448,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
 
   const renderTableHeader = (showNotes: boolean, hideCategory = false) => (
     <thead>
-      <tr className="bg-slate-900 text-slate-100 font-cute text-sm uppercase tracking-wider">
+      <tr className="bg-gradient-to-r from-pink-50 via-purple-50 to-indigo-50 text-gray-700 font-cute text-sm uppercase tracking-wider">
         {showSortOrder && <th className="px-3 py-4 font-bold text-center">STT</th>}
         <th className="px-6 py-4 font-bold">Sản phẩm</th>
         {showCategory && !hideCategory && <th className="px-6 py-4 font-bold">Danh mục</th>}
