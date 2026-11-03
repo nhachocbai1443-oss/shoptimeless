@@ -97,9 +97,28 @@ export const copyMainProductsToShop = async (slug: string): Promise<number> => {
 // - Admin phụ bấm Lưu ở tab Cài đặt của shop mình 1 lần là tạo
 //   document riêng, từ đó sửa gì cũng không ảnh hưởng shop chính,
 //   và shop chính sửa sau cũng không ảnh hưởng shop phụ này nữa.
+// Link liên hệ nổi (cụm nút tròn góc phải dưới): Messenger,
+// Zalo, Telegram. Mỗi shop có 1 bộ riêng: shop chính lưu trong
+// app_settings, shop phụ lưu trong shop_settings của shop đó.
+// Để trống 1 link là nút đó không hiện nữa.
+export interface ContactLinks {
+  messenger?: string;
+  zalo?: string;
+  telegram?: string;
+}
+
+// Link mặc định hiện tại của web (đang hardcode trong Layout):
+// cài đặt chưa có link nào thì dùng bộ này, để web không mất nút.
+export const DEFAULT_CONTACT_LINKS: ContactLinks = {
+  messenger: 'https://www.facebook.com/messages/t/971626916025287',
+  zalo: 'https://zalo.me/0528173022',
+  telegram: 'https://t.me/thienduong1443',
+};
+
 export interface ShopSettings {
   payment_methods?: any[];
   categories?: Category[];
+  contact_links?: ContactLinks;
 }
 
 export const getShopSettings = async (slug: string): Promise<ShopSettings | null> => {
