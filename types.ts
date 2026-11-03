@@ -1,10 +1,16 @@
-export type UserRole = 'admin' | 'ctv' | 'user';
+export type UserRole = 'admin' | 'ctv' | 'user' | 'subadmin';
 
 export interface User {
   id: string;
   username: string;
   role: UserRole;
   created_at: string;
+  // Admin phụ (subadmin): mã link shop riêng, tên shop, id của
+  // admin chính đã tạo ra tài khoản này. Admin chính không có
+  // 3 field này. Mã link KHÔNG nên trùng username.
+  shop_slug?: string | null;
+  shop_name?: string | null;
+  created_by?: string | null;
 }
 
 export interface ProductVariant {
@@ -32,6 +38,10 @@ export interface Product {
   notes: string;
   category: string;
   created_at?: string;
+  // Mã shop sở hữu sản phẩm. Không có / null = shop của admin
+  // chính. Có mã = sản phẩm của riêng shop phụ đó, sửa/xóa ở
+  // shop đó không động tới shop chính hay shop phụ khác.
+  shop_slug?: string | null;
 }
 
 export interface AppState {
@@ -80,4 +90,7 @@ export interface Order {
   account_info?: string;
   status: 'pending' | 'completed' | 'cancelled';
   created_at: string;
+  // Mã shop mà đơn này mua từ đó. Không có / null = shop chính.
+  // Dùng để admin phụ chỉ thấy đơn của shop mình.
+  shop_slug?: string | null;
 }
