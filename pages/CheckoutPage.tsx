@@ -161,9 +161,34 @@ const CheckoutPage: React.FC<Props> = ({ user, onProductShopSlug }) => {
       // Lưu đơn hàng vào Firestore
       const docRef = await addDoc(collection(db, 'orders'), orderData);
 
+      // Định tuyến thông báo theo shop phát sinh đơn:
+      // - Shop chính: Telegram chung luôn gửi, Gmail chính (.env)
+      //   nhận như cũ.
+      // - Shop phụ: Gmail riêng của shop đó (admin chính nhập ở
+      //   tab Admin phụ) nhận thêm đơn của riêng shop đó; Telegram
+      //   chung chỉ gửi khi admin chính đã bật telegram_enabled
+      //   cho shop đó, mặc định là TẮT. Đọc cài đặt lỗi thì coi
+      //   như chưa bật (không gửi Telegram), để khỏi gửi nhầm
+      //   đơn của shop chưa được bật lên luồng chung. Lỗi đọc
+      //   này không chặn việc đặt đơn thành công.
+      const orderShopSlug = (product as any).shop_slug || null;
+      let subNotifyEmail = '';
+      let subTelegramEnabled = false;
+      if (orderShopSlug) {
+        try {
+          const notifySettings = await getShopSettings(orderShopSlug);
+          if (notifySettings?.notify_email?.trim()) subNotifyEmail = notifySettings.notify_email.trim();
+          subTelegramEnabled = notifySettings?.telegram_enabled === true;
+        } catch (err) {
+          console.error('Error loading shop notification settings:', err);
+        }
+      }
+
       // Gửi thông báo Telegram và Email (chạy nền, không chặn UI)
       sendAllNotifications({
         orderId: docRef.id,
+        shopSlug: orderShopSlug,
+        shopLabel: orderShopSlug ? `Shop phụ: ${orderShopSlug}` : 'Shop chính',
         productName: product.name,
         variantForm: currentForm,
         quantity: quantity,
@@ -181,6 +206,9 @@ const CheckoutPage: React.FC<Props> = ({ user, onProductShopSlug }) => {
           accountNo: selectedMethod.account_no || '',
           transferContent: qrData.content || `DH${docRef.id.slice(-6).toUpperCase()}`
         } : undefined
+      }, {
+        sendTelegram: orderShopSlug ? subTelegramEnabled : true,
+        extraEmails: subNotifyEmail ? [subNotifyEmail] : []
       }).catch(err => console.error('Notification error (non-blocking):', err));
 
       setShowSuccessPopup(true);
