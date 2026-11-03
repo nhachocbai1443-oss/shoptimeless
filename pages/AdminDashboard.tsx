@@ -433,13 +433,16 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
         sort_order: originalOrder + 1,
         created_at: new Date().toISOString(),
       };
-      batch.set(doc(collection(db, 'products')), duplicateData);
+      const newDocRef = doc(collection(db, 'products'));
+      batch.set(newDocRef, duplicateData);
       await batch.commit();
       // Nhân bản ở shop chính cũng là 1 sản phẩm mới của shop
       // chính, nên cũng sao chép sang các shop phụ như khi thêm
       // mới. Nhân bản ở shop phụ thì không sao chép đi đâu cả.
+      // Truyền luôn id vừa tạo để bản sao ghi copied_from, sau
+      // này chính sửa giá CTV mới truyền sang được.
       if (!isSubShop) {
-        await fanOutNewMainProduct(duplicateData);
+        await fanOutNewMainProduct({ ...duplicateData, id: newDocRef.id });
       }
       alert(`Đã nhân bản: ${product.name} (Bản sao)`);
       fetchProducts();
