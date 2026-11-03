@@ -185,9 +185,22 @@ export const sendEmailNotification = async (
 // KHÁCH (địa chỉ khách nhập lúc đặt đơn) và chỉ gửi khi admin
 // nhập nội dung giao hàng rồi bấm gửi — không tự gửi lúc đặt đơn.
 // Vì vậy nó cần 1 template EmailJS RIÊNG cho khách (không dùng
-// chung template thông báo cho admin, vì nội dung khác hẳn):
-// - Biến môi trường mới: VITE_EMAILJS_DELIVERY_TEMPLATE_ID
-//   (Service ID và Public Key dùng chung với template cũ).
+// chung template thông báo cho admin, vì nội dung khác hẳn).
+// - DÙNG 2 TÀI KHOẢN ĐƯỢC KHÔNG? Được: email giao hàng có thể
+//   dùng tài khoản EmailJS khác với email báo đơn cho admin.
+//   Tài khoản cũ hết lượt tạo template nhưng template cũ vẫn
+//   gửi được, nên cứ để báo đơn cho admin ở tài khoản cũ, còn
+//   giao hàng dùng tài khoản mới. Muốn vậy thì đặt thêm 2 biến:
+//   VITE_EMAILJS_DELIVERY_SERVICE_ID và
+//   VITE_EMAILJS_DELIVERY_PUBLIC_KEY (của tài khoản mới). Nếu
+//   không đặt 2 biến này thì hàm tự dùng chung Service ID +
+//   Public Key của báo đơn cho admin (tức là 1 tài khoản cho cả
+//   2 loại email) — lúc đó template giao hàng bắt buộc phải nằm
+//   cùng tài khoản với Service Key đó, không thì EmailJS báo
+//   "template ID not found".
+// - Biến môi trường cho template giao hàng:
+//   VITE_EMAILJS_DELIVERY_TEMPLATE_ID (ID template giao hàng,
+//   thuộc cùng tài khoản với Service ID dùng để gửi nó).
 // - Trong EmailJS, tạo template mới, đặt ô "To Email" là
 //   {{to_email}} để email đi đúng tới khách của từng đơn.
 // - Tiêu đề template gợi ý (dán nguyên vào ô Subject):
@@ -223,12 +236,14 @@ export const sendDeliveryEmail = async (
   order: DeliveryEmailData,
   deliveryInfo: string
 ): Promise<void> => {
-  const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-  const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+  // Ưu tiên Service Key RIÊNG cho giao hàng (tài khoản mới);
+  // không có thì dùng chung Service Key của báo đơn cho admin.
+  const serviceId = import.meta.env.VITE_EMAILJS_DELIVERY_SERVICE_ID || import.meta.env.VITE_EMAILJS_SERVICE_ID;
+  const publicKey = import.meta.env.VITE_EMAILJS_DELIVERY_PUBLIC_KEY || import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
   const templateId = import.meta.env.VITE_EMAILJS_DELIVERY_TEMPLATE_ID;
 
   if (!serviceId || !publicKey) {
-    throw new Error('Chưa cấu hình EmailJS (thiếu VITE_EMAILJS_SERVICE_ID hoặc VITE_EMAILJS_PUBLIC_KEY).');
+    throw new Error('Chưa cấu hình EmailJS (thiếu Service ID hoặc Public Key).');
   }
   if (!templateId) {
     throw new Error('Chưa cấu hình template giao hàng: thêm VITE_EMAILJS_DELIVERY_TEMPLATE_ID vào Vercel rồi deploy lại.');
