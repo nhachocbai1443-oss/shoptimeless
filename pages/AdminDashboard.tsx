@@ -14,6 +14,7 @@ import {
   copyMainProductsToShop,
   fanOutNewMainProduct,
   getShopSettings,
+  DEFAULT_CONTACT_LINKS,
 } from '../utils/shop';
 
 interface Props {
@@ -70,6 +71,11 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
   // Settings State
   const [ctvPageContent, setCtvPageContent] = useState('');
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [contactLinks, setContactLinks] = useState<{ messenger: string; zalo: string; telegram: string }>({
+    messenger: DEFAULT_CONTACT_LINKS.messenger || '',
+    zalo: DEFAULT_CONTACT_LINKS.zalo || '',
+    telegram: DEFAULT_CONTACT_LINKS.telegram || '',
+  });
   const [savingSettings, setSavingSettings] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState<number | null>(null);
   const [uploadingQR, setUploadingQR] = useState<number | null>(null);
@@ -154,24 +160,24 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
 
   const fetchSettings = async () => {
     try {
-      // Shop phụ: nếu đã có cài đặt riêng thì dùng cài đặt riêng,
-      // chưa có thì dùng cài đặt của shop chính làm điểm bắt đầu
-      // (để shop mới vẫn bán được ngay, sửa và Lưu 1 lần là tách
-      // riêng, xem getShopSettings trong utils/shop.ts).
-      if (isSubShop && shopSlug) {
-        const shopSettings = await getShopSettings(shopSlug);
-        if (shopSettings && (shopSettings.payment_methods || shopSettings.categories)) {
-          if (shopSettings.payment_methods) setPaymentMethods(shopSettings.payment_methods);
-          if (shopSettings.categories) setCategories(shopSettings.categories);
-          return;
-        }
-        // Chưa có cài đặt riêng: rơi xuống dưới để tải của chính.
-      }
+      // Tải cài đặt của shop chính trước làm nền, rồi shop phụ
+      // (nếu có cài đặt riêng) sẽ ghi đè từng mục đã lưu riêng.
+      // Cách này xử lý đúng cả trường hợp shop phụ đã lưu riêng
+      // từ trước (ví dụ chỉ lưu phương thức thanh toán, chưa lưu
+      // link liên hệ): mục nào chưa lưu riêng thì vẫn dùng của
+      // chính, không bị rơi về link mặc định.
       const docRef = doc(db, 'app_settings', '1');
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
         setCtvPageContent(data.ctv_page_content || '');
+        if (data.contact_links) {
+          setContactLinks({
+            messenger: data.contact_links.messenger || '',
+            zalo: data.contact_links.zalo || '',
+            telegram: data.contact_links.telegram || '',
+          });
+        }
         setPaymentMethods(data.payment_methods || [
           { 
             id: 'acb', 
@@ -196,6 +202,22 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
         setCategories(data.categories || DEFAULT_CATEGORIES);
       } else {
         setCategories(DEFAULT_CATEGORIES);
+      }
+      // Shop phụ: ghi đè từng mục đã lưu riêng lên trên nền
+      // của shop chính vừa tải (xem ghi chú ở đầu hàm).
+      if (isSubShop && shopSlug) {
+        const shopSettings = await getShopSettings(shopSlug);
+        if (shopSettings) {
+          if (shopSettings.payment_methods) setPaymentMethods(shopSettings.payment_methods);
+          if (shopSettings.categories) setCategories(shopSettings.categories);
+          if (shopSettings.contact_links) {
+            setContactLinks({
+              messenger: shopSettings.contact_links.messenger || '',
+              zalo: shopSettings.contact_links.zalo || '',
+              telegram: shopSettings.contact_links.telegram || '',
+            });
+          }
+        }
       }
     } catch (err) {
       console.error('Error fetching settings:', err);
@@ -526,13 +548,15 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
         await setDoc(doc(db, 'shop_settings', shopSlug), {
           payment_methods: paymentMethods,
           categories: categories,
+          contact_links: contactLinks,
         }, { merge: true });
-        alert('Đã lưu cài đặt riêng của shop! Từ giờ shop này dùng phương thức thanh toán và danh mục riêng, không ảnh hưởng shop chính.');
+        alert('Đã lưu cài đặt riêng của shop! Từ giờ shop này dùng phương thức thanh toán, danh mục và link liên hệ riêng, không ảnh hưởng shop chính.');
       } else {
         await setDoc(doc(db, 'app_settings', '1'), {
           ctv_page_content: ctvPageContent,
           payment_methods: paymentMethods,
-          categories: categories
+          categories: categories,
+          contact_links: contactLinks,
         }, { merge: true });
         alert('Đã lưu cài đặt!');
       }
@@ -1035,7 +1059,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
             {isSubShop && (
               <div className="bg-pink-50 border border-pink-100 p-5 rounded-[24px] text-sm text-gray-600 leading-relaxed">
                 <strong className="text-primary">Cài đặt riêng của shop {user.shop_name || shopSlug}:</strong> phương
-                thức thanh toán và danh mục ở đây chỉ áp dụng cho shop này, không ảnh hưởng shop chính.
+                thức thanh toán, danh mục và link liên hệ ở đây chỉ áp dụng cho shop này, không ảnh hưởng shop chính.
                 Lần đầu chưa lưu thì shop đang dùng cài đặt của shop chính, bạn sửa rồi bấm
                 <strong> Lưu tất cả cài đặt</strong> ở cuối trang 1 lần là từ đó tách riêng hẳn.
               </div>
@@ -1397,8 +1421,50 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
               </div>
             </div>
 
+            {/* Link liên hệ nổi — cụm nút tròn góc phải dưới
+                (Messenger / Zalo / Telegram). Shop chính sửa ở đây
+                thì đổi link ở trang chủ chính, shop phụ sửa ở đây
+                thì chỉ đổi link ở shop của mình. Để trống 1 ô là
+                nút đó không hiện nữa. */}
+            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl">
+              <h3 className="text-2xl font-cute font-bold text-primary mb-2">Link liên hệ nổi 💬</h3>
+              <p className="text-xs text-gray-400 mb-6">Cụm nút tròn ở góc phải dưới mọi trang của shop. Dán đủ đường link (bắt đầu bằng https://). Nhớ nhấn <strong>Lưu tất cả cài đặt</strong> ở cuối trang để áp dụng.</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Messenger</label>
+                  <input
+                    type="text"
+                    value={contactLinks.messenger}
+                    onChange={(e) => setContactLinks((p) => ({ ...p, messenger: e.target.value.trim() }))}
+                    placeholder="VD: https://www.facebook.com/messages/t/..."
+                    className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Zalo</label>
+                  <input
+                    type="text"
+                    value={contactLinks.zalo}
+                    onChange={(e) => setContactLinks((p) => ({ ...p, zalo: e.target.value.trim() }))}
+                    placeholder="VD: https://zalo.me/0123456789"
+                    className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Telegram</label>
+                  <input
+                    type="text"
+                    value={contactLinks.telegram}
+                    onChange={(e) => setContactLinks((p) => ({ ...p, telegram: e.target.value.trim() }))}
+                    placeholder="VD: https://t.me/username"
+                    className="w-full px-4 py-2.5 rounded-xl border border-pink-100 focus:border-primary focus:outline-none text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="flex justify-center pb-10">
-              <button 
+              <button
                 onClick={handleSaveSettings}
                 disabled={savingSettings}
                 className="bg-primary hover:bg-pink-600 text-white px-16 py-4 rounded-3xl font-bold shadow-xl shadow-primary/20 transition-all transform hover:-translate-y-1 active:scale-95 disabled:bg-gray-300 text-lg"
