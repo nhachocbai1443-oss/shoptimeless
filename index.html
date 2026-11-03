@@ -7,8 +7,17 @@
     <meta name="theme-color" content="#fbcfe8" />
     <meta
       name="description"
-      content="Bảng giá tài khoản Premium cute dành cho học sinh, sinh viên."
+      content="Bảng giá tài khoản Premium Studytimeless."
     />
+    <!-- Dòng mô tả này là dòng chữ mờ hiện dưới tiêu đề khi gửi
+         link qua Zalo/Messenger/Facebook: các app đó không chạy
+         code web mà chỉ đọc thẻ meta của trang. Web là trang đơn
+         (HashRouter) nên mọi link, kể cả link shop phụ, đều đọc
+         chung 1 mô tả này — không tách riêng từng shop được. -->
+    <meta property="og:title" content="Studytimeless Premium Shop" />
+    <meta property="og:description" content="Bảng giá tài khoản Premium Studytimeless." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.shoptimeless.io.vn/" />
     <title>Studytimeless Premium Shop</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -29,21 +38,24 @@
               auroraAmber: '#fcd34d',
             },
             fontFamily: {
-              cute: ['"Patrick Hand"', 'cursive', 'sans-serif'],
-              body: ['"Quicksand"', 'sans-serif'],
+              cute: ['"Be Vietnam Pro"', 'sans-serif'],
+              body: ['"Be Vietnam Pro"', 'sans-serif'],
             }
           }
         }
       }
     </script>
-    <!-- Google Fonts: Patrick Hand (Headings) & Quicksand (Body) -->
-    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Google Fonts: Be Vietnam Pro (chuyên nghiệp, hỗ trợ tốt tiếng Việt, dùng cho cả tiêu đề lẫn nội dung) -->
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
       body {
-        font-family: 'Quicksand', sans-serif;
-        /* Nền mới: gradient nhiều màu pastel chuyển nhẹ từ hồng
-           sang tím, xanh dương rồi xanh lá, phủ thêm chấm bi mờ.
-           Cấu trúc trang không đổi, chỉ nền đẹp hơn. */
+        font-family: 'Be Vietnam Pro', sans-serif;
+        /* Nền TRẢ VỀ BẢN CŨ (bản beauty đầu, file index.html bạn
+           gửi lại): gradient hồng pastel chuyển nhẹ sang tím, xanh
+           dương, xanh lá, phủ chấm bi mờ. Bản aurora trung tính
+           mới thử đã bỏ vì bạn thấy nền cũ này đẹp hơn. Các phần
+           khác của bản mới (khung bảng, icon, font) vẫn giữ nguyên,
+           chỉ riêng nền là trả về cũ. */
         background-color: #fdf2f8;
         background-image:
           radial-gradient(#fbcfe8 1.2px, transparent 1.2px),
@@ -54,25 +66,25 @@
         height: 100vh;
       }
       h1, h2, h3, h4, h5, h6, .font-cute {
-        font-family: 'Patrick Hand', cursive;
+        font-family: 'Be Vietnam Pro', sans-serif;
       }
 
-      /* Nút/bảng màu chính chuyển sang gradient hồng - tím - chàm,
-         nhìn nổi và nhiều màu hơn màu hồng phẳng cũ. Chỉ áp cho
+      /* Nút/bảng màu chính chuyển sang gradient chàm - tím - hồng
+         đậm, sang và chuyên nghiệp hơn hồng phẳng cũ. Chỉ áp cho
          class bg-primary thuần (không áp cho bg-primary/10 dạng
          nhạt), nên các badge nhạt trong web không bị ảnh hưởng. */
       .bg-primary {
-        background-image: linear-gradient(135deg, #f472b6 0%, #e879f9 48%, #a78bfa 100%);
+        background-image: linear-gradient(135deg, #6366f1 0%, #a855f7 48%, #ec4899 100%);
       }
 
       /* Bóng mềm cho thẻ trắng, nhìn nổi khỏi nền gradient hơn. */
       .shadow-xl {
-        box-shadow: 0 20px 40px -18px rgba(219, 39, 119, 0.28), 0 8px 20px -12px rgba(99, 102, 241, 0.22);
+        box-shadow: 0 24px 50px -24px rgba(15, 23, 42, 0.28), 0 8px 20px -12px rgba(99, 102, 241, 0.22);
       }
 
       ::selection {
-        background: #fbcfe8;
-        color: #9d174d;
+        background: #ddd6fe;
+        color: #1e1b4b;
       }
 
       /* Custom Cute Scrollbar */
@@ -84,11 +96,11 @@
         border-radius: 10px;
       }
       .custom-scrollbar::-webkit-scrollbar-thumb {
-        background-color: #fbcfe8; /* pastelPinkDark */
+        background-color: #c7d2fe;
         border-radius: 20px;
       }
       .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background-color: #db2777; /* primary */
+        background-color: #6366f1; /* indigo */
       }
 
       /* Hide Scrollbar Class */
@@ -109,41 +121,55 @@
         animation: fadeIn 0.5s ease-out forwards;
       }
 
-      /* Hiệu ứng rơi (dùng bởi components/FallingEffect.tsx):
-         lớp ngoài rơi thẳng từ trên màn hình xuống dưới, lớp trong
-         bay lượn qua lại như gió. Chỉ dùng transform/opacity nên
-         nhẹ máy, không làm giật khi cuộn trang. */
-      .falling-item {
+      /* Cánh hoa đào rơi (dùng bởi components/FallingEffect.tsx),
+         copy đúng kiểu bên web confession (cfstimeless):
+         1 cánh đào đơn vẽ bằng CSS, gradient hồng, bo tròn kiểu
+         cánh hoa, có highlight trắng ở giữa, rơi chậm, bay lượn
+         qua lại và xoay nhẹ. Lớp này z-index 1, nằm SAU nội dung
+         nên hoa chỉ rơi ở nền, không đè lên chữ như bản emoji cũ. */
+      .shop-petal-rain {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 1;
+        overflow: hidden;
+      }
+      .shop-petal {
         position: absolute;
-        top: -48px;
-        will-change: transform, opacity;
-        animation-name: shop-fall;
-        animation-timing-function: linear;
-        animation-iteration-count: infinite;
+        top: -24px;
+        background: linear-gradient(135deg, #ffe3ef 0%, #ffb3d4 55%, #ff8fbf 100%);
+        border-radius: 100% 4% 100% 4%;
+        opacity: 0;
+        animation: shop-petal-fall linear infinite;
+        filter: drop-shadow(0 2px 3px rgba(219, 39, 119, 0.15));
       }
-      .falling-sway {
-        display: inline-block;
-        will-change: transform;
-        animation-name: shop-sway;
-        animation-timing-function: ease-in-out;
-        animation-iteration-count: infinite;
-        animation-direction: alternate;
+      .shop-petal::after {
+        content: '';
+        position: absolute;
+        inset: 2px 4px;
+        background: rgba(255, 255, 255, 0.35);
+        border-radius: 100% 4% 100% 4%;
       }
-      @keyframes shop-fall {
-        0% { transform: translateY(-6vh) rotate(0deg); opacity: 0; }
-        8% { opacity: 1; }
-        88% { opacity: 1; }
-        100% { transform: translateY(112vh) rotate(340deg); opacity: 0; }
-      }
-      @keyframes shop-sway {
-        from { transform: translateX(-14px) rotate(-18deg); }
-        to { transform: translateX(14px) rotate(18deg); }
+      @keyframes shop-petal-fall {
+        0% {
+          transform: translateY(-20px) translateX(0) rotate(0deg);
+          opacity: 0;
+        }
+        8% { opacity: 0.92; }
+        50% {
+          transform: translateY(50vh) translateX(30px) rotate(170deg);
+          opacity: 0.88;
+        }
+        100% {
+          transform: translateY(108vh) translateX(-22px) rotate(350deg);
+          opacity: 0;
+        }
       }
 
       /* Người dùng bật "giảm chuyển động" thì tắt hẳn hiệu ứng rơi,
          trang vẫn hiện đầy đủ nội dung, không bị mờ hay mất chữ. */
       @media (prefers-reduced-motion: reduce) {
-        .falling-effect {
+        .shop-petal-rain {
           display: none;
         }
         .animate-fade-in {
