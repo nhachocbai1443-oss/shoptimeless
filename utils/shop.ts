@@ -123,6 +123,23 @@ export interface ShopSettings {
   payment_methods?: any[];
   categories?: Category[];
   contact_links?: ContactLinks;
+  // THÔNG BÁO ĐƠN HÀNG RIÊNG CỦA SHOP PHỤ — chỉ admin chính
+  // đặt được ở tab Admin phụ, admin phụ không thấy/không sửa
+  // được 2 mục này (tab Admin phụ chỉ hiện với admin chính, và
+  // nút Lưu ở tab Cài đặt của shop phụ dùng merge nên không xóa
+  // được 2 mục này):
+  // - notify_email: Gmail nhận thông báo đơn của RIÊNG shop này.
+  //   Để trống = shop này không gửi Gmail cho phụ, chỉ gửi về
+  //   Gmail của admin chính (danh sách trong .env) như cũ.
+  // - telegram_enabled: mặc định TẮT (false / không có = tắt).
+  //   Bật = đơn của shop này được gửi lên luồng Telegram CHUNG
+  //   (1 bot + 1 chat của admin chính, xem notifications.ts).
+  //   Đơn của shop chính luôn gửi lên Telegram chung, nên phụ
+  //   nào ở trong nhóm Telegram chung sẽ thấy cả đơn shop chính
+  //   lẫn đơn của các shop phụ đã bật — đó chính là ý "chung
+  //   1 luồng" mà bạn chốt, không phải Telegram riêng từng phụ.
+  notify_email?: string;
+  telegram_enabled?: boolean;
 }
 
 export const getShopSettings = async (slug: string): Promise<ShopSettings | null> => {
