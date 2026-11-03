@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { collection, doc, getDoc, addDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { uploadImageToSupabase } from '../supabase';
 import { Product, User, Category } from '../types';
-import { fanOutNewMainProduct, getShopSettings } from '../utils/shop';
+import { fanOutNewMainProduct, getShopSettings, propagateCtvPriceToSubShops } from '../utils/shop';
 
 interface Props {
   user: User;
@@ -35,6 +35,12 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [isDragOver, setIsDragOver] = useState(false);
   const notesRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sản phẩm gốc lúc mở form sửa (tên + danh mục TRƯỚC khi sửa):
+  // để khi chính sửa xong thì tìm đúng bản sao cũ ở shop phụ mà
+  // truyền giá CTV sang, kể cả khi chính đổi tên/danh mục trong
+  // lần sửa này (bản sao vẫn giữ tên/danh mục cũ).
+  const [originalProduct, setOriginalProduct] = useState<any>(null);
 
   const [form, setForm] = useState<Partial<Product>>({
     category: DEFAULT_CATEGORIES[0].name,
@@ -113,6 +119,7 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
               return;
             }
             setForm({ id: snap.id, ...data } as any);
+            setOriginalProduct({ id: snap.id, ...data });
           }
         })
         .catch(err => console.error(err))
@@ -280,14 +287,29 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
 
       if (isEdit) {
         await updateDoc(doc(db, 'products', productId!), productData);
+        // Chính sửa sản phẩm cũ: giá CTV phải luôn theo chính nên
+        // truyền giá CTV sang các bản sao ở shop phụ (chỉ giá CTV,
+        // không truyền giá Public hay các field khác). Admin phụ
+        // sửa thì không truyền đi đâu cả.
+        if (!isSubShop) {
+          await propagateCtvPriceToSubShops({
+            id: productId!,
+            name: originalProduct?.name ?? productData.name,
+            category: originalProduct?.category ?? productData.category,
+            price_ctv: productData.price_ctv,
+            price_ctvtime: productData.price_ctvtime,
+            variants: productData.variants,
+          });
+        }
         alert('Đã cập nhật sản phẩm thành công!');
       } else {
-        await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
+        const newRef = await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
         // Admin chính thêm MỚI thì tự sao chép sang các shop phụ.
         // Admin phụ thêm mới, và cả 2 bên sửa sản phẩm cũ, thì
-        // không sao chép đi đâu cả.
+        // không sao chép đi đâu cả. Truyền luôn id vừa tạo để bản
+        // sao ghi copied_from, sau này truyền giá CTV mới khớp.
         if (!isSubShop) {
-          await fanOutNewMainProduct(productData);
+          await fanOutNewMainProduct({ ...productData, id: newRef.id });
         }
         alert('Đã thêm sản phẩm mới thành công!');
       }
@@ -337,11 +359,21 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
 
             if (isEdit) {
               await updateDoc(doc(db, 'products', productId!), productData);
+              if (!isSubShop) {
+                await propagateCtvPriceToSubShops({
+                  id: productId!,
+                  name: originalProduct?.name ?? productData.name,
+                  category: originalProduct?.category ?? productData.category,
+                  price_ctv: productData.price_ctv,
+                  price_ctvtime: productData.price_ctvtime,
+                  variants: productData.variants,
+                });
+              }
               alert('Đã cập nhật sản phẩm thành công!');
             } else {
-              await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
+              const newRef = await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
               if (!isSubShop) {
-                await fanOutNewMainProduct(productData);
+                await fanOutNewMainProduct({ ...productData, id: newRef.id });
               }
               alert('Đã thêm sản phẩm mới thành công!');
             }
