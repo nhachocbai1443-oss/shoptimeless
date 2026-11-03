@@ -191,8 +191,19 @@ const ShopPage: React.FC<Props> = ({ user }) => {
     <div className="w-full flex flex-col items-center animate-fade-in">
       <div className="w-full max-w-6xl px-4 pt-6 pb-4 flex flex-col md:flex-row md:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-cute font-bold text-gray-900">🏪 {shop.shop_name || 'Shop'}</h2>
-          <p className="text-gray-400 text-sm font-medium">Trang sản phẩm riêng của shop này. Giá ở đây là giá riêng của shop, không chung với shop chính.</p>
+          {/* Dòng giới thiệu "Trang sản phẩm riêng..." đã bỏ theo
+              yêu cầu: chỉ còn tên shop, gọn và chuyên nghiệp hơn. */}
+          <h2 className="text-3xl font-cute font-bold text-gray-900 flex items-center gap-3">
+            <span className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center shadow-md shrink-0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l1.5-4.5A2 2 0 0 1 6.4 3h11.2a2 2 0 0 1 1.9 1.5L21 9" />
+                <path d="M3 9h18" />
+                <path d="M5 9v11h14V9" />
+                <path d="M9 20v-6h6v6" />
+              </svg>
+            </span>
+            {shop.shop_name || 'Shop'}
+          </h2>
         </div>
         <div className="md:ml-auto flex gap-2">
           {isOwner && (
