@@ -4,6 +4,7 @@ import { Product, ProductVariant, PaymentMethod, User } from '../types';
 import { db } from '../firebase';
 import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { sendAllNotifications } from '../utils/notifications';
+import { getShopSettings } from '../utils/shop';
 
 interface Props {
   user: User | null;
@@ -42,23 +43,36 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
         // Fetch Product
         const pDocRef = doc(db, 'products', productId);
         const pDocSnap = await getDoc(pDocRef);
-        
+
+        let productData: any = null;
         if (!pDocSnap.exists()) {
           setProduct(null);
         } else {
-          setProduct({ id: pDocSnap.id, ...pDocSnap.data() } as any);
+          productData = { id: pDocSnap.id, ...pDocSnap.data() } as any;
+          setProduct(productData);
         }
 
-        // Fetch Settings
-        const sDocRef = doc(db, 'app_settings', '1');
-        const sDocSnap = await getDoc(sDocRef);
-        if (sDocSnap.exists()) {
-          const sData = sDocSnap.data();
-          if (sData.payment_methods) {
-            setPaymentMethods(sData.payment_methods);
-            if (sData.payment_methods.length > 0) {
-              setFormData(prev => ({ ...prev, paymentMethod: sData.payment_methods[0].id }));
-            }
+        // Fetch Settings: đơn ở shop phụ dùng phương thức thanh
+        // toán riêng của shop đó nếu đã lưu, chưa lưu thì dùng
+        // phương thức của shop chính (giống cách ShopPage hiển
+        // thị danh mục). Đơn ở shop chính vẫn dùng app_settings.
+        let methods: any[] | undefined;
+        if (productData?.shop_slug) {
+          const shopSettings = await getShopSettings(productData.shop_slug);
+          if (shopSettings?.payment_methods?.length) methods = shopSettings.payment_methods;
+        }
+        if (!methods) {
+          const sDocRef = doc(db, 'app_settings', '1');
+          const sDocSnap = await getDoc(sDocRef);
+          if (sDocSnap.exists()) {
+            const sData = sDocSnap.data();
+            if (sData.payment_methods) methods = sData.payment_methods;
+          }
+        }
+        if (methods) {
+          setPaymentMethods(methods);
+          if (methods.length > 0) {
+            setFormData(prev => ({ ...prev, paymentMethod: methods[0].id }));
           }
         }
       } catch (err) {
