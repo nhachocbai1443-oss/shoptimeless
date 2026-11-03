@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { User } from '../types';
 import LoginForm from '../components/LoginForm';
@@ -6,9 +6,14 @@ import { RESERVED_SLUGS } from '../utils/shop';
 
 interface Props {
   onLogin: (user: User) => void;
+  // User hiện tại (nếu đã đăng nhập sẵn mà gõ thẳng /login).
+  // Trước đây App chặn trường hợp này bằng <Navigate to="/" />
+  // ở route, và chính lệnh đó đã ghi đè lệnh về shop phụ sau
+  // khi đăng nhập xong. Giờ chặn đó bỏ, Login tự xử lý ở đây.
+  user?: User | null;
 }
 
-const Login: React.FC<Props> = ({ onLogin }) => {
+const Login: React.FC<Props> = ({ onLogin, user }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -24,22 +29,40 @@ const Login: React.FC<Props> = ({ onLogin }) => {
       ? returnShop
       : null;
 
-  const handleLoginSuccess = (user: User) => {
-    onLogin(user);
-    if (user.role === 'admin') {
-      navigate('/admin');
-    } else if (user.role === 'subadmin' && user.shop_slug) {
+  // Luật đích đến dùng chung cho cả 2 đường: đăng nhập xong và
+  // đã đăng nhập sẵn mà vào lại /login.
+  const destinationFor = (u: User): string => {
+    if (u.role === 'admin') {
+      return '/admin';
+    }
+    if (u.role === 'subadmin' && u.shop_slug) {
       // Admin phụ đăng nhập ở đâu cũng về trang quản lý của shop
       // mình, không vào trang admin chính.
-      navigate(`/${user.shop_slug}/admin`);
-    } else if (validReturnShop) {
+      return `/${u.shop_slug}/admin`;
+    }
+    if (validReturnShop) {
       // CTV và khách đăng nhập từ shop phụ thì về lại link shop
       // đó (ví dụ /#/abc) để mua hàng với giá của shop đó, không
       // về trang chủ chính và không vào trang quản lý.
-      navigate(`/${validReturnShop}`);
-    } else {
-      navigate('/');
+      return `/${validReturnShop}`;
     }
+    return '/';
+  };
+
+  // Đã đăng nhập sẵn mà vào /login thì đi thẳng tới đích, khỏi
+  // hiện lại form đăng nhập.
+  useEffect(() => {
+    if (user) {
+      navigate(destinationFor(user), { replace: true });
+    }
+    // Chỉ chạy khi user đổi từ chưa có thành đã có; returnShop
+    // lấy từ state của lần vào trang này, không cần theo dõi thêm.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  const handleLoginSuccess = (loggedInUser: User) => {
+    onLogin(loggedInUser);
+    navigate(destinationFor(loggedInUser));
   };
 
   return (
