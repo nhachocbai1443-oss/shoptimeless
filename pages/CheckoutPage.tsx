@@ -121,6 +121,9 @@ const CheckoutPage: React.FC<Props> = ({ user }) => {
         : null;
 
       const orderData = {
+        // Đơn mua từ shop phụ thì gắn mã shop đó, để admin phụ chỉ
+        // thấy đơn của shop mình; đơn shop chính thì không gắn mã.
+        shop_slug: (product as any).shop_slug || null,
         product_id: product.id,
         product_name: product.name,
         variant_form: currentForm,
