@@ -182,18 +182,27 @@ const ProductTable: React.FC<ProductTableProps> = ({
     navigate(`/product-notes/${product.id}`);
   };
 
+  // Giá hiển thị: trước đây getPrice trả thẳng price_public /
+  // price_ctv, nên chỉ cần 1 sản phẩm thiếu giá (undefined) là
+  // price.toLocaleString() crash cả trang shop. Giờ thiếu giá nào
+  // thì rơi về giá còn lại, cuối cùng là 0, không bao giờ trả
+  // undefined. Không lưu gì thêm vào localStorage, chỉ sửa cách
+  // hiển thị, dữ liệu sản phẩm vẫn nằm ở Firestore như cũ.
   const getPrice = (
     price_public: number,
     price_ctv: number,
     price_ctvtime?: number
   ): number => {
+    const pub = Number(price_public) || 0;
+    const ctv = Number(price_ctv) || 0;
+    const ctvtime = Number(price_ctvtime) || 0;
     if (isCtvtime) {
-      return (price_ctvtime && price_ctvtime > 0) ? price_ctvtime : price_ctv;
+      return ctvtime > 0 ? ctvtime : ctv > 0 ? ctv : pub;
     }
     if (isCTV) {
-      return price_ctv;
+      return ctv > 0 ? ctv : pub;
     }
-    return price_public;
+    return pub;
   };
 
   const renderProductRow = (
@@ -332,7 +341,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                   const v = product.variants![variantIdx];
                   price = getPrice(v.price_public, v.price_ctv, v.price_ctvtime);
                 }
-                return price.toLocaleString('vi-VN');
+                return (Number(price) || 0).toLocaleString('vi-VN');
               })()}đ
             </span>
             {isCTV && (
