@@ -105,4 +105,12 @@ export interface Order {
   // Mã shop mà đơn này mua từ đó. Không có / null = shop chính.
   // Dùng để admin phụ chỉ thấy đơn của shop mình.
   shop_slug?: string | null;
+  // NỘI DUNG GIAO HÀNG do admin nhập tay (tài khoản + mật khẩu
+  // giao cho khách) và thời điểm gửi email giao hàng cho khách.
+  // Chỉ có khi admin đã bấm "Gửi email giao hàng" ở tab Đơn hàng;
+  // chưa gửi thì khách không nhận được email nào cả. Admin phụ
+  // cũng dùng 2 field này cho đơn của shop mình (tab Đơn hàng
+  // của phụ đã lọc sẵn chỉ còn đơn của shop đó).
+  delivery_info?: string;
+  delivery_email_sent_at?: string;
 }
