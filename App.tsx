@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -10,9 +10,30 @@ import AdminDashboard from './pages/AdminDashboard';
 import CheckoutPage from './pages/CheckoutPage';
 import ProductFormPage from './pages/ProductFormPage';
 import ProductNotesPage from './pages/ProductNotesPage';
+import ShopPage from './pages/ShopPage';
 import { User } from './types';
 
 const SESSION_KEY = 'studytimeless_user';
+
+// Trang quản lý của shop phụ: chỉ admin phụ sở hữu đúng mã shop
+// đó mới vào được, còn lại đẩy về trang shop đó (dạng khách).
+function ShopAdminPage({ user }: { user: User | null }) {
+  const { shopSlug } = useParams<{ shopSlug: string }>();
+  if (!shopSlug) return <Navigate to="/" />;
+  if (!user || user.role !== 'subadmin' || user.shop_slug !== shopSlug) {
+    return <Navigate to={`/${shopSlug}`} />;
+  }
+  return <AdminDashboard user={user} shopSlug={shopSlug} />;
+}
+
+function ShopProductFormPage({ user }: { user: User | null }) {
+  const { shopSlug } = useParams<{ shopSlug: string }>();
+  if (!shopSlug) return <Navigate to="/" />;
+  if (!user || user.role !== 'subadmin' || user.shop_slug !== shopSlug) {
+    return <Navigate to={`/${shopSlug}`} />;
+  }
+  return <ProductFormPage user={user} shopSlug={shopSlug} />;
+}
 
 /**
  * Vì sao trang admin "để lâu rồi vào lại thì bấm Sửa không được,
@@ -233,16 +254,27 @@ function App() {
         <Routes>
           {/* Mở link gốc mà đang đăng nhập sẵn admin thì tự chuyển
               thẳng sang trang Quản lý, khỏi phải bấm Quản lý hay
-              đăng xuất đăng nhập lại. Khách và CTV vẫn vào trang
-              chủ bình thường (có nút Mua ngay) như cũ. */}
+              đăng xuất đăng nhập lại. Admin phụ thì về trang quản
+              lý của shop mình. Khách và CTV vẫn vào trang chủ bình
+              thường (có nút Mua ngay) như cũ. */}
           <Route
             path="/"
             element={
               user && user.role === 'admin'
                 ? <Navigate to="/admin" replace />
-                : <Home user={user} />
+                : user && user.role === 'subadmin' && user.shop_slug
+                  ? <Navigate to={`/${user.shop_slug}/admin`} replace />
+                  : <Home user={user} />
             }
           />
+
+          {/* Shop phụ: /#/mã-link là trang sản phẩm riêng của shop
+              đó, /#/mã-link/admin là trang quản lý của shop đó.
+              Route động này đặt sau các route tĩnh (/admin, /login,
+              /checkout/...) nên không nuốt mất các route đó. */}
+          <Route path="/:shopSlug" element={<ShopPage user={user} />} />
+          <Route path="/:shopSlug/admin" element={<ShopAdminPage user={user} />} />
+          <Route path="/:shopSlug/admin/product/:productId" element={<ShopProductFormPage user={user} />} />
 
           <Route
             path="/login"
