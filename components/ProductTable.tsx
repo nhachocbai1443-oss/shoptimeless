@@ -14,6 +14,9 @@ interface ProductTableProps {
   showSortOrder?: boolean;
   groupByCategory?: boolean;
   categories?: Category[];
+  // Trang quản lý của shop phụ: user là subadmin nhưng vẫn phải
+  // hiện cột Thao tác, kéo-thả, nhân bản như trang admin chính.
+  forceAdminView?: boolean;
 }
 
 const ProductTable: React.FC<ProductTableProps> = ({
@@ -28,9 +31,10 @@ const ProductTable: React.FC<ProductTableProps> = ({
   showSortOrder = false,
   groupByCategory = false,
   categories = [],
+  forceAdminView = false,
 }) => {
   const navigate = useNavigate();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || forceAdminView;
   const isCTV = user?.role === 'ctv';
   const isCtvtime = isCTV && user?.username === 'ctvtime';
   const [selectedVariantIndices, setSelectedVariantIndices] = useState<Record<string, number>>({});
