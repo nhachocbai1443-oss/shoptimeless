@@ -699,7 +699,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
             {isSubShop ? `🏪 Quản lý shop ${user.shop_name || shopSlug}` : '👑 Quản trị hệ thống'}
           </h2>
           
-          <div className="flex bg-white/50 backdrop-blur-sm p-1 rounded-2xl border border-pink-100 shadow-sm">
+          <div className="flex bg-white/90 backdrop-blur-sm p-1 rounded-2xl border border-slate-200 shadow-sm">
             <button 
               onClick={() => setActiveTab('orders')}
               className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'orders' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
@@ -743,7 +743,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
         {/* ORDERS TAB */}
         {activeTab === 'orders' && (
           <div className="space-y-6">
-            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl overflow-x-auto">
+            <div className="bg-white/90 backdrop-blur-sm p-8 rounded-[40px] border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)] overflow-x-auto">
               <h3 className="text-2xl font-cute font-bold text-primary mb-6">Danh sách đơn hàng 🛒</h3>
               {loadingOrders ? (
                 <div className="text-center py-10">Đang tải đơn hàng...</div>
@@ -860,7 +860,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
         {/* SUBADMINS TAB — chỉ admin chính */}
         {activeTab === 'subadmins' && !isSubShop && (
           <div className="space-y-6">
-            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl space-y-4">
+            <div className="bg-white/90 backdrop-blur-sm p-8 rounded-[40px] border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)] space-y-4">
               <h3 className="text-2xl font-cute font-bold text-primary">Tạo admin phụ 🏪</h3>
               <p className="text-sm text-gray-500">
                 Tạo xong là shop phụ có ngay đầy đủ sản phẩm và giá giống shop chính lúc đó.
@@ -895,7 +895,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
               </button>
             </div>
 
-            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl overflow-x-auto">
+            <div className="bg-white/90 backdrop-blur-sm p-8 rounded-[40px] border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)] overflow-x-auto">
               <h3 className="text-2xl font-cute font-bold text-primary mb-6">Danh sách admin phụ</h3>
               {loadingSubadmins ? (
                 <div className="text-center py-10 text-gray-400">Đang tải...</div>
@@ -973,7 +973,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
         {/* CTVS TAB */}
         {activeTab === 'ctvs' && (
           <div className="space-y-6">
-            <div className="bg-white/80 backdrop-blur-sm p-6 rounded-[32px] border border-pink-100 shadow-xl flex flex-col md:flex-row items-end gap-4">
+            <div className="bg-white/90 backdrop-blur-sm p-6 rounded-[32px] border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)] flex flex-col md:flex-row items-end gap-4">
               <div className="flex-1 w-full">
                 <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">Thêm Cộng tác viên mới</label>
                 <input 
@@ -1005,7 +1005,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
               </div>
             </div>
 
-            <div className="bg-white/50 backdrop-blur-sm rounded-3xl border border-pink-100 shadow-xl overflow-hidden">
+            <div className="bg-white/90 backdrop-blur-sm rounded-3xl border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)] overflow-hidden">
               <table className="w-full text-left">
                 <thead className="bg-primary text-white font-cute text-lg">
                   <tr>
@@ -1069,7 +1069,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
             )}
 
             {/* ===== QUẢN LÝ DANH MỤC ===== */}
-            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl">
+            <div className="bg-white/90 backdrop-blur-sm p-8 rounded-[40px] border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)]">
               <h3 className="text-2xl font-cute font-bold text-primary mb-2">Quản lý danh mục 🗂️</h3>
               <p className="text-xs text-gray-400 mb-6">Thêm, sửa, xóa danh mục sản phẩm. Nhớ nhấn <strong>Lưu tất cả cài đặt</strong> ở cuối trang để áp dụng.</p>
 
@@ -1251,7 +1251,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
 
             {/* CTV Content — chỉ shop chính, shop phụ không có */}
             {!isSubShop && (
-              <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl">
+              <div className="bg-white/90 backdrop-blur-sm p-8 rounded-[40px] border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)]">
                 <h3 className="text-2xl font-cute font-bold text-primary mb-6">Cài đặt trang Cộng tác viên 📝</h3>
                 <div className="space-y-4">
                   <div>
@@ -1269,7 +1269,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
             )}
 
             {/* Payment Methods */}
-            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl">
+            <div className="bg-white/90 backdrop-blur-sm p-8 rounded-[40px] border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)]">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-2xl font-cute font-bold text-primary">Phương thức thanh toán & Chuyển khoản 💳</h3>
                 <button 
@@ -1429,7 +1429,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
                 thì đổi link ở trang chủ chính, shop phụ sửa ở đây
                 thì chỉ đổi link ở shop của mình. Để trống 1 ô là
                 nút đó không hiện nữa. */}
-            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl">
+            <div className="bg-white/90 backdrop-blur-sm p-8 rounded-[40px] border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)]">
               <h3 className="text-2xl font-cute font-bold text-primary mb-2">Link liên hệ nổi 💬</h3>
               <p className="text-xs text-gray-400 mb-6">Cụm nút tròn ở góc phải dưới mọi trang của shop. Dán đủ đường link (bắt đầu bằng https://). Nhớ nhấn <strong>Lưu tất cả cài đặt</strong> ở cuối trang để áp dụng.</p>
               <div className="space-y-4">
