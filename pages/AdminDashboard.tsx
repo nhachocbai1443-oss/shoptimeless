@@ -57,7 +57,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
   const [newSubUsername, setNewSubUsername] = useState('');
   const [newSubShopName, setNewSubShopName] = useState('');
   const [newSubSlug, setNewSubSlug] = useState('');
-  const [editingSub, setEditingSub] = useState<Record<string, { shop_name: string; shop_slug: string }>>({});
+  const [editingSub, setEditingSub] = useState<Record<string, { shop_name: string; shop_slug: string; notify_email: string; telegram_enabled: boolean }>>({});
   
   // Products State
   const [products, setProducts] = useState<Product[]>([]);
@@ -264,10 +264,22 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
       const snap = await getDocs(q);
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as User[];
       setSubadmins(list);
-      const editMap: Record<string, { shop_name: string; shop_slug: string }> = {};
-      list.forEach((u) => {
-        editMap[u.id] = { shop_name: u.shop_name || '', shop_slug: u.shop_slug || '' };
-      });
+      // Tải luôn cài đặt thông báo riêng của từng shop (Gmail
+      // nhận đơn + công tắc Telegram chung) để hiện sẵn trong
+      // bảng. Shop chưa đặt thì Gmail trống, Telegram tắt.
+      const editMap: Record<string, { shop_name: string; shop_slug: string; notify_email: string; telegram_enabled: boolean }> = {};
+      await Promise.all(list.map(async (u) => {
+        let notify_email = '';
+        let telegram_enabled = false;
+        if (u.shop_slug) {
+          try {
+            const s = await getShopSettings(u.shop_slug);
+            if (s?.notify_email) notify_email = s.notify_email;
+            telegram_enabled = s?.telegram_enabled === true;
+          } catch {}
+        }
+        editMap[u.id] = { shop_name: u.shop_name || '', shop_slug: u.shop_slug || '', notify_email, telegram_enabled };
+      }));
       setEditingSub(editMap);
     } catch (err) {
       console.error('Error fetching subadmins:', err);
@@ -365,6 +377,16 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
           await deleteDoc(doc(db, 'shop_settings', oldSlug));
         }
       }
+      // Lưu cài đặt thông báo riêng của shop này (dùng merge
+      // nên không xóa phương thức thanh toán, danh mục hay link
+      // liên hệ đã lưu riêng trước đó). Chỉ admin chính bấm nút
+      // Lưu ở tab này mới ghi được 2 mục này; admin phụ không
+      // thấy tab Admin phụ, và nút Lưu ở tab Cài đặt của shop
+      // phụ cũng chỉ merge 3 mục kia nên không xóa được 2 mục này.
+      await setDoc(doc(db, 'shop_settings', newSlug), {
+        notify_email: (edit.notify_email || '').trim(),
+        telegram_enabled: !!edit.telegram_enabled,
+      }, { merge: true });
       alert('Đã lưu shop phụ.');
       fetchSubadmins();
     } catch (err: any) {
@@ -866,6 +888,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
                 Tạo xong là shop phụ có ngay đầy đủ sản phẩm và giá giống shop chính lúc đó.
                 Sau đó 2 bên tách riêng, trừ khi bạn thêm MỚI sản phẩm ở shop chính thì sản phẩm mới đó tự sao chép sang các shop phụ.
                 Mã link do bạn tự đặt, sửa được, không nên trùng username.
+                Thông báo đơn hàng: shop phụ mới tạo mặc định KHÔNG gửi Gmail riêng và TẮT Telegram chung — bạn nhập Gmail và bật Telegram cho từng shop ở bảng dưới rồi bấm Lưu, đơn của shop đó mới đi đúng luồng đó.
               </p>
               <div className="grid md:grid-cols-3 gap-3">
                 <input
@@ -902,18 +925,20 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
               ) : subadmins.length === 0 ? (
                 <div className="text-center py-10 text-gray-400 italic">Chưa có admin phụ nào...</div>
               ) : (
-                <table className="w-full text-left border-collapse min-w-[800px]">
+                <table className="w-full text-left border-collapse min-w-[1100px]">
                   <thead>
                     <tr className="bg-gray-50/50 text-gray-500 font-cute text-xs uppercase tracking-wider">
                       <th className="px-4 py-3 font-bold">Username</th>
                       <th className="px-4 py-3 font-bold">Tên shop</th>
                       <th className="px-4 py-3 font-bold">Mã link / Link shop</th>
+                      <th className="px-4 py-3 font-bold">Gmail nhận đơn của shop này</th>
+                      <th className="px-4 py-3 font-bold text-center">Telegram chung</th>
                       <th className="px-4 py-3 font-bold text-center">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody className="text-sm">
                     {subadmins.map((sub) => {
-                      const edit = editingSub[sub.id] || { shop_name: sub.shop_name || '', shop_slug: sub.shop_slug || '' };
+                      const edit = editingSub[sub.id] || { shop_name: sub.shop_name || '', shop_slug: sub.shop_slug || '', notify_email: '', telegram_enabled: false };
                       return (
                         <tr key={sub.id} className="border-t border-gray-50">
                           <td className="px-4 py-4 font-bold text-gray-800">{sub.username}</td>
@@ -945,6 +970,28 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
                             >
                               📋 Sao chép link
                             </button>
+                          </td>
+                          <td className="px-4 py-4">
+                            <input
+                              type="email"
+                              value={edit.notify_email}
+                              onChange={(e) => setEditingSub((prev) => ({ ...prev, [sub.id]: { ...edit, notify_email: e.target.value } }))}
+                              placeholder="Gmail nhận đơn shop này..."
+                              className="px-3 py-2 rounded-xl border border-gray-200 focus:outline-none w-full"
+                            />
+                            <div className="text-xs text-gray-400 mt-1">Chỉ nhận đơn của riêng shop này. Để trống = không gửi Gmail cho phụ.</div>
+                          </td>
+                          <td className="px-4 py-4 text-center whitespace-nowrap">
+                            <label className="inline-flex flex-col items-center gap-1 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={!!edit.telegram_enabled}
+                                onChange={(e) => setEditingSub((prev) => ({ ...prev, [sub.id]: { ...edit, telegram_enabled: e.target.checked } }))}
+                                className="w-5 h-5 accent-pink-600"
+                              />
+                              <span className="text-xs font-bold text-gray-600">{edit.telegram_enabled ? 'Đang bật' : 'Đang tắt'}</span>
+                            </label>
+                            <div className="text-xs text-gray-400 mt-1 normal-case font-normal">Bật = đơn shop này gửi lên luồng Telegram chung (1 bot + 1 chat của bạn). Đơn shop chính luôn gửi lên đó.</div>
                           </td>
                           <td className="px-4 py-4 text-center whitespace-nowrap">
                             <button
