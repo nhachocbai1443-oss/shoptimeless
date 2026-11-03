@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { collection, doc, getDoc, addDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { uploadImageToSupabase } from '../supabase';
 import { Product, User, Category } from '../types';
-import { fanOutNewMainProduct } from '../utils/shop';
+import { fanOutNewMainProduct, getShopSettings } from '../utils/shop';
 
 interface Props {
   user: User;
@@ -53,14 +53,26 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
     variants: []
   });
 
-  // Load danh mục từ Firestore
+  // Load danh mục từ Firestore. Form ở shop phụ dùng danh mục
+  // riêng của shop đó nếu đã lưu, chưa lưu thì dùng danh mục
+  // của shop chính (giống cách ShopPage hiển thị).
   useEffect(() => {
     const loadCategories = async () => {
       try {
-        const docRef = doc(db, 'app_settings', '1');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data().categories && docSnap.data().categories.length > 0) {
-          const cats: Category[] = docSnap.data().categories;
+        let shopCats: Category[] | undefined;
+        if (shopSlug) {
+          const shopSettings = await getShopSettings(shopSlug);
+          if (shopSettings?.categories?.length) shopCats = shopSettings.categories;
+        }
+        if (!shopCats) {
+          const docRef = doc(db, 'app_settings', '1');
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists() && docSnap.data().categories && docSnap.data().categories.length > 0) {
+            shopCats = docSnap.data().categories;
+          }
+        }
+        if (shopCats && shopCats.length > 0) {
+          const cats: Category[] = shopCats;
           const sorted = [...cats].sort((a, b) => a.sort_order - b.sort_order);
           setCategories(sorted);
           if (!isEdit) {
