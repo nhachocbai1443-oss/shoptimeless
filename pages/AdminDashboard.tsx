@@ -264,22 +264,18 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
       const snap = await getDocs(q);
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as User[];
       setSubadmins(list);
-      // Tải luôn cài đặt thông báo riêng của từng shop (Gmail
-      // nhận đơn + công tắc Telegram chung) để hiện sẵn trong
-      // bảng. Shop chưa đặt thì Gmail trống, Telegram tắt.
+      // Cài đặt thông báo nằm ngay trên document users của từng
+      // phụ nên đọc thẳng từ đó, không cần đọc shop_settings.
+      // Phụ chưa đặt thì Gmail trống, Telegram tắt.
       const editMap: Record<string, { shop_name: string; shop_slug: string; notify_email: string; telegram_enabled: boolean }> = {};
-      await Promise.all(list.map(async (u) => {
-        let notify_email = '';
-        let telegram_enabled = false;
-        if (u.shop_slug) {
-          try {
-            const s = await getShopSettings(u.shop_slug);
-            if (s?.notify_email) notify_email = s.notify_email;
-            telegram_enabled = s?.telegram_enabled === true;
-          } catch {}
-        }
-        editMap[u.id] = { shop_name: u.shop_name || '', shop_slug: u.shop_slug || '', notify_email, telegram_enabled };
-      }));
+      list.forEach((u) => {
+        editMap[u.id] = {
+          shop_name: u.shop_name || '',
+          shop_slug: u.shop_slug || '',
+          notify_email: u.notify_email || '',
+          telegram_enabled: u.telegram_enabled === true,
+        };
+      });
       setEditingSub(editMap);
     } catch (err) {
       console.error('Error fetching subadmins:', err);
@@ -361,7 +357,17 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
       if (!window.confirm(`Đổi mã link từ "${oldSlug}" sang "${newSlug}"? Link cũ sẽ hết hiệu lực, bạn phải gửi link mới cho admin phụ.`)) return;
     }
     try {
-      await updateDoc(doc(db, 'users', sub.id), { shop_name: shopName, shop_slug: newSlug });
+      // Lưu tên shop, mã link VÀ cài đặt thông báo trong cùng 1
+      // lần ghi users — đường ghi này chạy được từ trước, không
+      // còn ghi shop_settings nữa (ghi đó từng bị Firestore chặn
+      // quyền). Admin phụ không thấy tab này nên không tự sửa
+      // được 2 mục thông báo của mình.
+      await updateDoc(doc(db, 'users', sub.id), {
+        shop_name: shopName,
+        shop_slug: newSlug,
+        notify_email: (edit.notify_email || '').trim(),
+        telegram_enabled: !!edit.telegram_enabled,
+      });
       if (newSlug !== oldSlug) {
         // Đổi mã link thì đổi luôn mã shop trên toàn bộ sản phẩm
         // của shop đó, không thì shop sẽ trống sản phẩm.
@@ -377,16 +383,6 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
           await deleteDoc(doc(db, 'shop_settings', oldSlug));
         }
       }
-      // Lưu cài đặt thông báo riêng của shop này (dùng merge
-      // nên không xóa phương thức thanh toán, danh mục hay link
-      // liên hệ đã lưu riêng trước đó). Chỉ admin chính bấm nút
-      // Lưu ở tab này mới ghi được 2 mục này; admin phụ không
-      // thấy tab Admin phụ, và nút Lưu ở tab Cài đặt của shop
-      // phụ cũng chỉ merge 3 mục kia nên không xóa được 2 mục này.
-      await setDoc(doc(db, 'shop_settings', newSlug), {
-        notify_email: (edit.notify_email || '').trim(),
-        telegram_enabled: !!edit.telegram_enabled,
-      }, { merge: true });
       alert('Đã lưu shop phụ.');
       fetchSubadmins();
     } catch (err: any) {
