@@ -180,14 +180,11 @@ const ShopPage: React.FC<Props> = ({ user }) => {
               ⚙️ Quản lý shop
             </Link>
           )}
-          {!user && (
-            <Link
-              to="/login"
-              className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-5 py-2.5 rounded-2xl text-sm font-bold shadow-sm"
-            >
-              🔑 Đăng nhập
-            </Link>
-          )}
+          {/* Không thêm nút Đăng nhập ở đây nữa: header chung của
+              web đã có sẵn 1 nút Đăng nhập góc trên bên phải rồi,
+              thêm nữa thành 2 nút trùng nhau. Admin phụ bấm nút
+              trên header là vào trang đăng nhập, đăng nhập xong
+              vẫn tự về trang quản lý của shop mình như cũ. */}
         </div>
       </div>
 
