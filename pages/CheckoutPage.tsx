@@ -270,7 +270,16 @@ const CheckoutPage: React.FC<Props> = ({ user, onProductShopSlug }) => {
               </p>
             </div>
             <button
-              onClick={() => { setShowSuccessPopup(false); navigate('/'); }}
+              onClick={() => {
+                setShowSuccessPopup(false);
+                // Đơn ở shop phụ thì về trang chủ của ĐÚNG shop
+                // phụ đó (/#/slug), không về trang chủ shop chính.
+                // Trước đây nút này ghi cứng navigate('/') nên
+                // khách đặt ở shop phụ xong cũng bị đẩy về shop
+                // chính như bạn báo. Đơn shop chính thì vẫn '/'.
+                const homeSlug = (product as any)?.shop_slug;
+                navigate(homeSlug ? `/${homeSlug}` : '/');
+              }}
               className="w-full bg-primary hover:bg-pink-600 text-white py-4 rounded-3xl font-bold shadow-xl shadow-primary/20 transition-all transform hover:-translate-y-1 active:scale-95 text-lg"
             >
               Về trang chủ
