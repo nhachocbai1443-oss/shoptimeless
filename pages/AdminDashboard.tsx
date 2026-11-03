@@ -5,6 +5,7 @@ import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, updateDoc, de
 import { uploadImageToSupabase } from '../supabase';
 import { Product, User, UserRole, Order, Category } from '../types';
 import ProductTable from '../components/ProductTable';
+import { sendDeliveryEmail } from '../utils/notifications';
 import {
   RESERVED_SLUGS,
   normalizeSlug,
@@ -91,6 +92,13 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
   // Orders State
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+
+  // Giao hàng qua email cho khách (mở popup từ tab Đơn hàng):
+  // admin nhập tài khoản/mật khẩu rồi bấm gửi thì khách mới nhận
+  // email. Chưa bấm gửi thì không có email nào được gửi cả.
+  const [deliveryOrder, setDeliveryOrder] = useState<Order | null>(null);
+  const [deliveryText, setDeliveryText] = useState('');
+  const [sendingDelivery, setSendingDelivery] = useState(false);
 
   useEffect(() => {
     if (isSubShop) {
@@ -663,6 +671,55 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
     }
   };
 
+  const openDelivery = (order: Order) => {
+    setDeliveryOrder(order);
+    setDeliveryText(order.delivery_info || '');
+  };
+
+  const handleSendDelivery = async () => {
+    if (!deliveryOrder) return;
+    if (!deliveryText.trim()) {
+      alert('Nhập nội dung giao hàng (tài khoản / mật khẩu) trước đã nhé.');
+      return;
+    }
+    if (!deliveryOrder.email?.trim()) {
+      alert('Đơn này không có email của khách nên không gửi được.');
+      return;
+    }
+    // Gửi email TRƯỚC, lưu sau: gửi lỗi thì không ghi nhận là
+    // đã gửi, admin sửa lại rồi gửi lại được. Gửi xong mới ghi
+    // nội dung + thời điểm gửi vào đơn để lần sau mở lại vẫn
+    // thấy, và nút ở danh sách hiện "Đã gửi". Trạng thái đơn
+    // (Chờ xử lý / Hoàn tất / Đã hủy) không tự đổi — admin tự
+    // chọn ở cột Trạng thái nếu muốn.
+    setSendingDelivery(true);
+    try {
+      await sendDeliveryEmail({
+        orderId: deliveryOrder.id,
+        productName: deliveryOrder.product_name,
+        variantForm: deliveryOrder.variant_form,
+        quantity: deliveryOrder.quantity,
+        totalPrice: deliveryOrder.total_price,
+        fullName: deliveryOrder.full_name,
+        customerEmail: deliveryOrder.email,
+        paymentMethod: deliveryOrder.payment_method,
+        shopName: isSubShop ? (user.shop_name || shopSlug || 'Studytimeless Premium Shop') : 'Studytimeless Premium Shop',
+        orderTime: (deliveryOrder as any).created_at,
+      }, deliveryText);
+      await updateDoc(doc(db, 'orders', deliveryOrder.id), {
+        delivery_info: deliveryText.trim(),
+        delivery_email_sent_at: new Date().toISOString(),
+      });
+      alert(`Đã gửi email giao hàng cho ${deliveryOrder.email}.`);
+      setDeliveryOrder(null);
+      fetchOrders();
+    } catch (err: any) {
+      alert(`Gửi email thất bại: ${err?.message || ''}`);
+    } finally {
+      setSendingDelivery(false);
+    }
+  };
+
   // --- CATEGORY ACTIONS ---
   const handleAddCategory = () => {
     if (!newCategory.name?.trim()) {
@@ -823,14 +880,26 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
                               <option value="cancelled">Đã hủy</option>
                             </select>
                           </td>
-                          <td className="px-4 py-4 text-center">
-                            <button 
+                          <td className="px-4 py-4 text-center whitespace-nowrap">
+                            <button
+                              onClick={() => openDelivery(order)}
+                              className="bg-blue-50 text-blue-600 px-3 py-2 rounded-xl font-bold text-xs mr-2"
+                              title="Nhập tài khoản/mật khẩu và gửi email giao hàng cho khách"
+                            >
+                              📦 Giao hàng
+                            </button>
+                            <button
                               onClick={() => handleDeleteOrder(order.id)}
                               className="text-gray-300 hover:text-red-500 transition-colors"
                               title="Xóa đơn hàng"
                             >
                               🗑️
                             </button>
+                            {order.delivery_email_sent_at && (
+                              <div className="text-[11px] text-green-600 font-bold mt-1">
+                                ✉️ Đã gửi {new Date(order.delivery_email_sent_at).toLocaleString('vi-VN')}
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ))
@@ -839,6 +908,54 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
                 </table>
               )}
             </div>
+
+            {/* POPUP GIAO HÀNG QUA EMAIL: chỉ mở khi admin bấm
+                "Giao hàng" ở 1 đơn. Email chỉ gửi khi bấm nút
+                gửi trong popup này, không tự gửi lúc đặt đơn. */}
+            {deliveryOrder && (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !sendingDelivery && setDeliveryOrder(null)}></div>
+                <div className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-lg p-8 space-y-4 animate-fade-in max-h-[90vh] overflow-y-auto">
+                  <h3 className="text-xl font-cute font-bold text-gray-800">📦 Giao hàng cho khách</h3>
+                  <div className="bg-gray-50 rounded-2xl p-4 text-sm space-y-1">
+                    <div><span className="text-gray-500">Đơn hàng: </span><span className="font-bold">#{deliveryOrder.id}</span></div>
+                    <div><span className="text-gray-500">Sản phẩm: </span><span className="font-bold">{deliveryOrder.product_name} ({deliveryOrder.variant_form} x{deliveryOrder.quantity})</span></div>
+                    <div><span className="text-gray-500">Tổng tiền: </span><span className="font-bold text-red-500">{deliveryOrder.total_price.toLocaleString('vi-VN')}đ</span></div>
+                    <div><span className="text-gray-500">Khách: </span><span className="font-bold">{deliveryOrder.full_name} — {deliveryOrder.email}</span></div>
+                    {deliveryOrder.delivery_email_sent_at && (
+                      <div className="text-green-600 font-bold text-xs pt-1">✉️ Đã gửi lần cuối: {new Date(deliveryOrder.delivery_email_sent_at).toLocaleString('vi-VN')} (sửa nội dung rồi bấm gửi lại nếu cần)</div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">Nội dung giao hàng (tài khoản / mật khẩu)</label>
+                    <textarea
+                      value={deliveryText}
+                      onChange={(e) => setDeliveryText(e.target.value)}
+                      rows={6}
+                      placeholder={'Tài khoản: ...\nMật khẩu: ...\nGhi chú thêm (nếu có)...'}
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 focus:outline-none focus:border-primary font-mono text-sm"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Nội dung này sẽ nằm TRÊN thông tin đơn hàng trong email khách nhận. Chỉ khi bạn bấm gửi thì khách mới nhận được email.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSendDelivery}
+                      disabled={sendingDelivery}
+                      className="flex-1 bg-primary hover:bg-pink-600 disabled:opacity-50 text-white py-3 rounded-2xl font-bold shadow-lg transition-all"
+                    >
+                      {sendingDelivery ? 'Đang gửi...' : (deliveryOrder.delivery_email_sent_at ? '✉️ Gửi lại email giao hàng' : '✉️ Gửi email giao hàng')}
+                    </button>
+                    <button
+                      onClick={() => !sendingDelivery && setDeliveryOrder(null)}
+                      disabled={sendingDelivery}
+                      className="px-5 py-3 rounded-2xl font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 transition-all"
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
