@@ -35,11 +35,19 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                   <span className="text-sm font-bold text-primary">{user.username}</span>
                 </div>
                 {user.role === 'admin' && (
-                  <Link 
-                    to="/admin" 
+                  <Link
+                    to="/admin"
                     className="bg-pink-100 hover:bg-pink-200 text-pink-700 px-4 py-2 rounded-2xl text-sm font-bold transition flex items-center gap-1 shadow-sm"
                   >
                     ⚙️ Quản lý
+                  </Link>
+                )}
+                {user.role === 'subadmin' && user.shop_slug && (
+                  <Link
+                    to={`/${user.shop_slug}/admin`}
+                    className="bg-pink-100 hover:bg-pink-200 text-pink-700 px-4 py-2 rounded-2xl text-sm font-bold transition flex items-center gap-1 shadow-sm"
+                  >
+                    ⚙️ Quản lý shop
                   </Link>
                 )}
                 <button 
