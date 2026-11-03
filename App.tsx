@@ -35,6 +35,44 @@ function ShopProductFormPage({ user }: { user: User | null }) {
   return <ProductFormPage user={user} shopSlug={shopSlug} />;
 }
 
+// Lưới an toàn: trước đây 1 trang con crash (ví dụ shop phụ gặp
+// sản phẩm thiếu field) là cả web trắng tinh, không header, không
+// báo lỗi gì. Giờ crash thì chỉ phần nội dung hiện thông báo và
+// nút tải lại, header vẫn còn, người dùng biết lỗi ở đâu.
+class PageErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+  static getDerivedStateFromError(err: any) {
+    return { hasError: true, message: err?.message || 'Lỗi không xác định.' };
+  }
+  componentDidCatch(err: any) {
+    console.error('Page error:', err);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="text-center py-32 bg-white rounded-[40px] border-2 border-dashed border-gray-100">
+          <div className="text-6xl mb-6">⚠️</div>
+          <h3 className="text-2xl font-cute font-bold text-gray-800 mb-2">Trang này gặp lỗi</h3>
+          <p className="text-gray-400">{this.state.message}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-6 bg-primary text-white px-6 py-3 rounded-2xl font-bold shadow-md"
+          >
+            🔄 Tải lại trang
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 /**
  * Vì sao trang admin "để lâu rồi vào lại thì bấm Sửa không được,
  * thoát ra đăng nhập lại mới được":
@@ -251,6 +289,7 @@ function App() {
   return (
     <HashRouter>
       <Layout user={user} onLogout={handleLogout}>
+        <PageErrorBoundary>
         <Routes>
           {/* Mở link gốc mà đang đăng nhập sẵn admin thì tự chuyển
               thẳng sang trang Quản lý, khỏi phải bấm Quản lý hay
@@ -309,6 +348,7 @@ function App() {
 
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
+        </PageErrorBoundary>
       </Layout>
     </HashRouter>
   );
