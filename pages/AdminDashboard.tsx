@@ -5,9 +5,21 @@ import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, updateDoc, de
 import { uploadImageToSupabase } from '../supabase';
 import { Product, User, UserRole, Order, Category } from '../types';
 import ProductTable from '../components/ProductTable';
+import {
+  RESERVED_SLUGS,
+  normalizeSlug,
+  isValidSlug,
+  shopLink,
+  productsOfShop,
+  copyMainProductsToShop,
+  fanOutNewMainProduct,
+} from '../utils/shop';
 
 interface Props {
   user: User;
+  // Không truyền = shop của admin chính. Truyền mã shop = trang
+  // quản lý của shop phụ đó (chỉ admin phụ sở hữu shop đó vào được).
+  shopSlug?: string;
 }
 
 // Danh mục mặc định (dùng khi Firestore chưa có dữ liệu)
@@ -29,9 +41,21 @@ const GRADIENT_OPTIONS = [
   { label: 'Xám – Đen', value: 'from-gray-400 to-gray-600' },
 ];
 
-const AdminDashboard: React.FC<Props> = ({ user }) => {
+const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'products' | 'ctvs' | 'settings' | 'orders'>('products');
+  const isSubShop = !!shopSlug;
+  const adminHomePath = isSubShop ? `/${shopSlug}/admin` : '/admin';
+  const productFormPath = (id: string) =>
+    isSubShop ? `/${shopSlug}/admin/product/${id}` : `/admin/product/${id}`;
+  const [activeTab, setActiveTab] = useState<'products' | 'ctvs' | 'settings' | 'orders' | 'subadmins'>('products');
+
+  // Admin phụ (chỉ admin chính mới thấy tab này)
+  const [subadmins, setSubadmins] = useState<User[]>([]);
+  const [loadingSubadmins, setLoadingSubadmins] = useState(false);
+  const [newSubUsername, setNewSubUsername] = useState('');
+  const [newSubShopName, setNewSubShopName] = useState('');
+  const [newSubSlug, setNewSubSlug] = useState('');
+  const [editingSub, setEditingSub] = useState<Record<string, { shop_name: string; shop_slug: string }>>({});
   
   // Products State
   const [products, setProducts] = useState<Product[]>([]);
@@ -62,10 +86,17 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
   const [loadingOrders, setLoadingOrders] = useState(false);
 
   useEffect(() => {
-    if (user.role !== 'admin') {
+    if (isSubShop) {
+      // Trang quản lý shop phụ: chỉ admin phụ sở hữu đúng shop đó
+      // mới vào được, admin chính và shop phụ khác đều bị đẩy về
+      // trang shop đó (dạng khách).
+      if (user.role !== 'subadmin' || user.shop_slug !== shopSlug) {
+        navigate(`/${shopSlug}`);
+      }
+    } else if (user.role !== 'admin') {
       navigate('/');
     }
-  }, [user, navigate]);
+  }, [user, navigate, isSubShop, shopSlug]);
 
   // --- FETCH DATA ---
   const fetchProducts = async () => {
@@ -81,13 +112,17 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
         if (b.is_hot === a.is_hot) return (a.sort_order || 0) - (b.sort_order || 0);
         return b.is_hot ? 1 : -1;
       });
-      setProducts(sorted || []);
+      // Lọc theo shop: shop chính chỉ thấy sản phẩm không gắn mã
+      // shop, shop phụ chỉ thấy sản phẩm gắn đúng mã shop của mình.
+      // Nhờ vậy admin phụ không bao giờ chạm được vào sản phẩm
+      // của admin chính hay của shop phụ khác từ trang này.
+      setProducts(productsOfShop(sorted || [], shopSlug));
     } catch (err: any) {
       console.error('Error fetching products:', err);
       try {
         const fallbackSnap = await getDocs(collection(db, 'products'));
         const fallbackData = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-        setProducts(fallbackData || []);
+        setProducts(productsOfShop(fallbackData || [], shopSlug));
       } catch (fallbackErr) {
         console.error('Fallback fetch failed:', fallbackErr);
       }
@@ -160,7 +195,12 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
       const q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
       const querySnapshot = await getDocs(q);
       const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-      setOrders(data || []);
+      // Đơn hàng cũng lọc theo shop như sản phẩm.
+      setOrders(
+        shopSlug
+          ? (data || []).filter((o: any) => o.shop_slug === shopSlug)
+          : (data || []).filter((o: any) => !o.shop_slug)
+      );
     } catch (err) {
       console.error('Error fetching orders:', err);
     } finally {
@@ -177,7 +217,134 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
     if (activeTab === 'ctvs') fetchCtvs();
     if (activeTab === 'settings') fetchSettings();
     if (activeTab === 'orders') fetchOrders();
+    if (activeTab === 'subadmins') fetchSubadmins();
   }, [activeTab]);
+
+  // --- SUBADMIN ACTIONS (chỉ admin chính) ---
+  const fetchSubadmins = async () => {
+    setLoadingSubadmins(true);
+    try {
+      const q = query(collection(db, 'users'), where('role', '==', 'subadmin'));
+      const snap = await getDocs(q);
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as User[];
+      setSubadmins(list);
+      const editMap: Record<string, { shop_name: string; shop_slug: string }> = {};
+      list.forEach((u) => {
+        editMap[u.id] = { shop_name: u.shop_name || '', shop_slug: u.shop_slug || '' };
+      });
+      setEditingSub(editMap);
+    } catch (err) {
+      console.error('Error fetching subadmins:', err);
+    } finally {
+      setLoadingSubadmins(false);
+    }
+  };
+
+  const handleAddSubadmin = async () => {
+    const username = newSubUsername.trim();
+    const shopName = newSubShopName.trim();
+    const slug = normalizeSlug(newSubSlug);
+    if (!username || !shopName || !slug) {
+      alert('Nhập đủ: username admin phụ, tên shop và mã link.');
+      return;
+    }
+    if (!isValidSlug(slug)) {
+      alert(`Mã link không hợp lệ. Chỉ dùng chữ thường, số và gạch ngang, không trùng từ cấm (${RESERVED_SLUGS.join(', ')}).`);
+      return;
+    }
+    if (slug === username.toLowerCase()) {
+      alert('Không nên đặt mã link trùng username, vì đăng nhập chỉ cần username nên lộ link là lộ tài khoản. Đặt mã khác với username nhé.');
+      return;
+    }
+    try {
+      const nameSnap = await getDocs(query(collection(db, 'users'), where('username', '==', username)));
+      if (!nameSnap.empty) {
+        alert('Username này đã có người dùng rồi, đổi username khác.');
+        return;
+      }
+      const slugSnap = await getDocs(query(collection(db, 'users'), where('shop_slug', '==', slug)));
+      if (!slugSnap.empty) {
+        alert('Mã link này đã có shop khác dùng rồi, đổi mã khác.');
+        return;
+      }
+      await addDoc(collection(db, 'users'), {
+        username,
+        role: 'subadmin',
+        shop_slug: slug,
+        shop_name: shopName,
+        created_by: user.id,
+        created_at: new Date().toISOString(),
+      });
+      // Sao chép toàn bộ sản phẩm chính sang shop phụ mới, ngay
+      // lúc tạo. Sau đó 2 bên tách riêng, trừ khi admin chính
+      // thêm MỚI sản phẩm (xem fanOutNewMainProduct).
+      const copied = await copyMainProductsToShop(slug);
+      alert(`Đã tạo admin phụ: ${username}\nShop: ${shopName}\nLink: ${shopLink(slug)}\nĐã sao chép ${copied} sản phẩm từ shop chính sang shop phụ.`);
+      setNewSubUsername('');
+      setNewSubShopName('');
+      setNewSubSlug('');
+      fetchSubadmins();
+    } catch (err: any) {
+      console.error('Error adding subadmin:', err);
+      alert(`Lỗi khi tạo admin phụ: ${err.message || ''}`);
+    }
+  };
+
+  const handleSaveSubadmin = async (sub: User) => {
+    const edit = editingSub[sub.id];
+    if (!edit) return;
+    const shopName = edit.shop_name.trim();
+    const newSlug = normalizeSlug(edit.shop_slug);
+    const oldSlug = sub.shop_slug || '';
+    if (!shopName || !newSlug) {
+      alert('Tên shop và mã link không được để trống.');
+      return;
+    }
+    if (!isValidSlug(newSlug)) {
+      alert('Mã link không hợp lệ.');
+      return;
+    }
+    if (newSlug !== oldSlug) {
+      const slugSnap = await getDocs(query(collection(db, 'users'), where('shop_slug', '==', newSlug)));
+      if (!slugSnap.empty) {
+        alert('Mã link này đã có shop khác dùng rồi, đổi mã khác.');
+        return;
+      }
+      if (!window.confirm(`Đổi mã link từ "${oldSlug}" sang "${newSlug}"? Link cũ sẽ hết hiệu lực, bạn phải gửi link mới cho admin phụ.`)) return;
+    }
+    try {
+      await updateDoc(doc(db, 'users', sub.id), { shop_name: shopName, shop_slug: newSlug });
+      if (newSlug !== oldSlug) {
+        // Đổi mã link thì đổi luôn mã shop trên toàn bộ sản phẩm
+        // của shop đó, không thì shop sẽ trống sản phẩm.
+        const prodSnap = await getDocs(query(collection(db, 'products'), where('shop_slug', '==', oldSlug)));
+        const batch = writeBatch(db);
+        prodSnap.docs.forEach((d) => batch.update(doc(db, 'products', d.id), { shop_slug: newSlug }));
+        await batch.commit();
+      }
+      alert('Đã lưu shop phụ.');
+      fetchSubadmins();
+    } catch (err: any) {
+      console.error('Error saving subadmin:', err);
+      alert(`Lỗi khi lưu shop phụ: ${err.message || ''}`);
+    }
+  };
+
+  const handleDeleteSubadmin = async (sub: User) => {
+    if (!window.confirm(`Xóa admin phụ "${sub.username}" và toàn bộ sản phẩm của shop "${sub.shop_name || sub.shop_slug}"? Hành động này không khôi phục được.`)) return;
+    try {
+      const prodSnap = await getDocs(query(collection(db, 'products'), where('shop_slug', '==', sub.shop_slug)));
+      const batch = writeBatch(db);
+      prodSnap.docs.forEach((d) => batch.delete(doc(db, 'products', d.id)));
+      await batch.commit();
+      await deleteDoc(doc(db, 'users', sub.id));
+      alert('Đã xóa admin phụ và sản phẩm của shop đó.');
+      fetchSubadmins();
+    } catch (err: any) {
+      console.error('Error deleting subadmin:', err);
+      alert(`Lỗi khi xóa admin phụ: ${err.message || ''}`);
+    }
+  };
 
   // --- PRODUCT ACTIONS ---
   const handleDeleteProduct = async (id: string) => {
@@ -210,15 +377,22 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
           }
         });
       const { id, ...rest } = product as any;
-      batch.set(doc(collection(db, 'products')), {
+      const duplicateData = {
         ...rest,
         name: product.name.endsWith('(Bản sao)')
           ? product.name
           : `${product.name} (Bản sao)`,
         sort_order: originalOrder + 1,
         created_at: new Date().toISOString(),
-      });
+      };
+      batch.set(doc(collection(db, 'products')), duplicateData);
       await batch.commit();
+      // Nhân bản ở shop chính cũng là 1 sản phẩm mới của shop
+      // chính, nên cũng sao chép sang các shop phụ như khi thêm
+      // mới. Nhân bản ở shop phụ thì không sao chép đi đâu cả.
+      if (!isSubShop) {
+        await fanOutNewMainProduct(duplicateData);
+      }
       alert(`Đã nhân bản: ${product.name} (Bản sao)`);
       fetchProducts();
     } catch (err) {
@@ -458,7 +632,7 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
       <div className="w-full max-w-6xl px-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <h2 className="text-4xl font-cute font-bold text-gray-800 flex items-center gap-3">
-            👑 Quản trị hệ thống
+            {isSubShop ? `🏪 Quản lý shop ${user.shop_name || shopSlug}` : '👑 Quản trị hệ thống'}
           </h2>
           
           <div className="flex bg-white/50 backdrop-blur-sm p-1 rounded-2xl border border-pink-100 shadow-sm">
@@ -474,18 +648,28 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
             >
               📦 Sản phẩm
             </button>
-            <button 
-              onClick={() => setActiveTab('ctvs')}
-              className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'ctvs' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
-            >
-              👥 CTV
-            </button>
-            <button 
-              onClick={() => setActiveTab('settings')}
-              className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'settings' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
-            >
-              ⚙️ Cài đặt
-            </button>
+            {!isSubShop && (
+              <>
+                <button
+                  onClick={() => setActiveTab('ctvs')}
+                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'ctvs' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
+                >
+                  👥 CTV
+                </button>
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'settings' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
+                >
+                  ⚙️ Cài đặt
+                </button>
+                <button
+                  onClick={() => setActiveTab('subadmins')}
+                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'subadmins' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
+                >
+                  🏪 Admin phụ
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -577,21 +761,22 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
         {activeTab === 'products' && (
           <div className="space-y-6">
             <div className="flex justify-end">
-              <button 
-                onClick={() => navigate('/admin/product/new')}
+              <button
+                onClick={() => navigate(productFormPath('new'))}
                 className="bg-secondary hover:bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg transition-all transform hover:-translate-y-1 flex items-center gap-2"
               >
                 ➕ Thêm sản phẩm mới
               </button>
             </div>
-            
+
             {loadingProducts ? (
               <div className="text-center py-20 text-gray-400">Đang tải sản phẩm...</div>
             ) : (
               <ProductTable
                 products={products}
                 user={user}
-                onEdit={(p) => navigate(`/admin/product/${p.id}`)}
+                forceAdminView={isSubShop}
+                onEdit={(p) => navigate(productFormPath(p.id))}
                 onDuplicate={handleDuplicateProduct}
                 onToggleHidden={handleToggleHidden}
                 onReorder={handleReorderProducts}
@@ -602,6 +787,119 @@ const AdminDashboard: React.FC<Props> = ({ user }) => {
                 categories={categories}
               />
             )}
+          </div>
+        )}
+
+        {/* SUBADMINS TAB — chỉ admin chính */}
+        {activeTab === 'subadmins' && !isSubShop && (
+          <div className="space-y-6">
+            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl space-y-4">
+              <h3 className="text-2xl font-cute font-bold text-primary">Tạo admin phụ 🏪</h3>
+              <p className="text-sm text-gray-500">
+                Tạo xong là shop phụ có ngay đầy đủ sản phẩm và giá giống shop chính lúc đó.
+                Sau đó 2 bên tách riêng, trừ khi bạn thêm MỚI sản phẩm ở shop chính thì sản phẩm mới đó tự sao chép sang các shop phụ.
+                Mã link do bạn tự đặt, sửa được, không nên trùng username.
+              </p>
+              <div className="grid md:grid-cols-3 gap-3">
+                <input
+                  value={newSubUsername}
+                  onChange={(e) => setNewSubUsername(e.target.value)}
+                  placeholder="Username admin phụ..."
+                  className="px-4 py-3 rounded-2xl border-2 border-pink-50 focus:border-primary focus:outline-none font-medium"
+                />
+                <input
+                  value={newSubShopName}
+                  onChange={(e) => setNewSubShopName(e.target.value)}
+                  placeholder="Tên shop..."
+                  className="px-4 py-3 rounded-2xl border-2 border-pink-50 focus:border-primary focus:outline-none font-medium"
+                />
+                <input
+                  value={newSubSlug}
+                  onChange={(e) => setNewSubSlug(e.target.value)}
+                  placeholder="Mã link, ví dụ: shop-a"
+                  className="px-4 py-3 rounded-2xl border-2 border-pink-50 focus:border-primary focus:outline-none font-medium"
+                />
+              </div>
+              <button
+                onClick={handleAddSubadmin}
+                className="bg-primary hover:bg-pink-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg transition-all"
+              >
+                + Tạo admin phụ và sao chép sản phẩm
+              </button>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-sm p-8 rounded-[40px] border border-pink-100 shadow-xl overflow-x-auto">
+              <h3 className="text-2xl font-cute font-bold text-primary mb-6">Danh sách admin phụ</h3>
+              {loadingSubadmins ? (
+                <div className="text-center py-10 text-gray-400">Đang tải...</div>
+              ) : subadmins.length === 0 ? (
+                <div className="text-center py-10 text-gray-400 italic">Chưa có admin phụ nào...</div>
+              ) : (
+                <table className="w-full text-left border-collapse min-w-[800px]">
+                  <thead>
+                    <tr className="bg-gray-50/50 text-gray-500 font-cute text-xs uppercase tracking-wider">
+                      <th className="px-4 py-3 font-bold">Username</th>
+                      <th className="px-4 py-3 font-bold">Tên shop</th>
+                      <th className="px-4 py-3 font-bold">Mã link / Link shop</th>
+                      <th className="px-4 py-3 font-bold text-center">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm">
+                    {subadmins.map((sub) => {
+                      const edit = editingSub[sub.id] || { shop_name: sub.shop_name || '', shop_slug: sub.shop_slug || '' };
+                      return (
+                        <tr key={sub.id} className="border-t border-gray-50">
+                          <td className="px-4 py-4 font-bold text-gray-800">{sub.username}</td>
+                          <td className="px-4 py-4">
+                            <input
+                              value={edit.shop_name}
+                              onChange={(e) => setEditingSub((prev) => ({ ...prev, [sub.id]: { ...edit, shop_name: e.target.value } }))}
+                              className="px-3 py-2 rounded-xl border border-gray-200 focus:outline-none w-full"
+                            />
+                          </td>
+                          <td className="px-4 py-4">
+                            <input
+                              value={edit.shop_slug}
+                              onChange={(e) => setEditingSub((prev) => ({ ...prev, [sub.id]: { ...edit, shop_slug: e.target.value } }))}
+                              className="px-3 py-2 rounded-xl border border-gray-200 focus:outline-none w-full font-mono"
+                            />
+                            <div className="text-xs text-gray-400 mt-1 break-all">{sub.shop_slug ? shopLink(sub.shop_slug) : ''}</div>
+                            <button
+                              onClick={() => {
+                                const slug = sub.shop_slug;
+                                if (slug) {
+                                  navigator.clipboard?.writeText(shopLink(slug)).then(
+                                    () => alert('Đã sao chép link shop.'),
+                                    () => alert(shopLink(slug))
+                                  );
+                                }
+                              }}
+                              className="text-xs text-primary font-bold hover:underline mt-1"
+                            >
+                              📋 Sao chép link
+                            </button>
+                          </td>
+                          <td className="px-4 py-4 text-center whitespace-nowrap">
+                            <button
+                              onClick={() => handleSaveSubadmin(sub)}
+                              className="bg-green-50 text-green-600 px-3 py-2 rounded-xl font-bold text-xs mr-2"
+                            >
+                              💾 Lưu
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSubadmin(sub)}
+                              className="bg-red-50 text-red-600 px-3 py-2 rounded-xl font-bold text-xs"
+                            >
+                              🗑️ Xóa shop
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         )}
 
