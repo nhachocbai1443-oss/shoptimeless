@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <link rel="icon" href="https://fav.farm/💌" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#fdf2f8" />
+    <meta name="theme-color" content="#fbcfe8" />
     <meta
       name="description"
       content="Bảng giá tài khoản Premium cute dành cho học sinh, sinh viên."
@@ -21,8 +21,12 @@
               pastelPinkDark: '#fbcfe8',
               pastelBlue: '#e0f2fe',
               pastelBlueDark: '#bae6fd',
-              primary: '#db2777', // pink-600
+              primary: '#db2777', // pink-600, giữ nguyên để không lệch với các nút hover:bg-pink-600 có sẵn trong code
               secondary: '#0ea5e9', // sky-500
+              auroraViolet: '#a78bfa',
+              auroraSky: '#7dd3fc',
+              auroraMint: '#6ee7b7',
+              auroraAmber: '#fcd34d',
             },
             fontFamily: {
               cute: ['"Patrick Hand"', 'cursive', 'sans-serif'],
@@ -37,16 +41,40 @@
     <style>
       body {
         font-family: 'Quicksand', sans-serif;
-        background-color: #fdf2f8; /* pink-50 */
-        background-image: radial-gradient(#fbcfe8 1px, transparent 1px);
-        background-size: 20px 20px;
+        /* Nền mới: gradient nhiều màu pastel chuyển nhẹ từ hồng
+           sang tím, xanh dương rồi xanh lá, phủ thêm chấm bi mờ.
+           Cấu trúc trang không đổi, chỉ nền đẹp hơn. */
+        background-color: #fdf2f8;
+        background-image:
+          radial-gradient(#fbcfe8 1.2px, transparent 1.2px),
+          linear-gradient(180deg, #fff1f2 0%, #fdf2f8 28%, #eef2ff 58%, #ecfeff 82%, #f0fdf4 100%);
+        background-size: 22px 22px, 100% 100%;
+        background-attachment: scroll, fixed;
         /* Đã xóa overflow: hidden để admin dashboard hiển thị bình thường */
         height: 100vh;
       }
       h1, h2, h3, h4, h5, h6, .font-cute {
         font-family: 'Patrick Hand', cursive;
       }
-      
+
+      /* Nút/bảng màu chính chuyển sang gradient hồng - tím - chàm,
+         nhìn nổi và nhiều màu hơn màu hồng phẳng cũ. Chỉ áp cho
+         class bg-primary thuần (không áp cho bg-primary/10 dạng
+         nhạt), nên các badge nhạt trong web không bị ảnh hưởng. */
+      .bg-primary {
+        background-image: linear-gradient(135deg, #f472b6 0%, #e879f9 48%, #a78bfa 100%);
+      }
+
+      /* Bóng mềm cho thẻ trắng, nhìn nổi khỏi nền gradient hơn. */
+      .shadow-xl {
+        box-shadow: 0 20px 40px -18px rgba(219, 39, 119, 0.28), 0 8px 20px -12px rgba(99, 102, 241, 0.22);
+      }
+
+      ::selection {
+        background: #fbcfe8;
+        color: #9d174d;
+      }
+
       /* Custom Cute Scrollbar */
       .custom-scrollbar::-webkit-scrollbar {
         width: 6px;
@@ -71,7 +99,7 @@
         -ms-overflow-style: none;  /* IE and Edge */
         scrollbar-width: none;  /* Firefox */
       }
-      
+
       /* Animation */
       @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
@@ -79,6 +107,48 @@
       }
       .animate-fade-in {
         animation: fadeIn 0.5s ease-out forwards;
+      }
+
+      /* Hiệu ứng rơi (dùng bởi components/FallingEffect.tsx):
+         lớp ngoài rơi thẳng từ trên màn hình xuống dưới, lớp trong
+         bay lượn qua lại như gió. Chỉ dùng transform/opacity nên
+         nhẹ máy, không làm giật khi cuộn trang. */
+      .falling-item {
+        position: absolute;
+        top: -48px;
+        will-change: transform, opacity;
+        animation-name: shop-fall;
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+      }
+      .falling-sway {
+        display: inline-block;
+        will-change: transform;
+        animation-name: shop-sway;
+        animation-timing-function: ease-in-out;
+        animation-iteration-count: infinite;
+        animation-direction: alternate;
+      }
+      @keyframes shop-fall {
+        0% { transform: translateY(-6vh) rotate(0deg); opacity: 0; }
+        8% { opacity: 1; }
+        88% { opacity: 1; }
+        100% { transform: translateY(112vh) rotate(340deg); opacity: 0; }
+      }
+      @keyframes shop-sway {
+        from { transform: translateX(-14px) rotate(-18deg); }
+        to { transform: translateX(14px) rotate(18deg); }
+      }
+
+      /* Người dùng bật "giảm chuyển động" thì tắt hẳn hiệu ứng rơi,
+         trang vẫn hiện đầy đủ nội dung, không bị mờ hay mất chữ. */
+      @media (prefers-reduced-motion: reduce) {
+        .falling-effect {
+          display: none;
+        }
+        .animate-fade-in {
+          animation: none;
+        }
       }
     </style>
   <script type="importmap">
