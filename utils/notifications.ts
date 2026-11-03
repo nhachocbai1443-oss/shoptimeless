@@ -17,6 +17,12 @@ export interface OrderNotificationData {
   notes: string;
   paymentMethod: string;
   accountInfo?: string | null;
+  // Shop phát sinh đơn: null = shop chính, có slug = shop phụ.
+  // shopLabel hiện trong tin Telegram để trong luồng chung vẫn
+  // biết đơn này của shop nào (ví dụ "Shop chính" hoặc
+  // "Shop phụ: timelesslien").
+  shopSlug?: string | null;
+  shopLabel?: string;
   // ⭐ THÊM THÔNG TIN CHUYỂN KHOẢN
   paymentDetails?: {
     accountName: string;
@@ -40,6 +46,7 @@ export const sendTelegramNotification = async (order: OrderNotificationData): Pr
 
   const message = `
 🛍️ *ĐƠN HÀNG MỚI - STUDYTIMELESS*
+${order.shopLabel ? `🏪 *Shop:* ${order.shopLabel}` : ''}
 ━━━━━━━━━━━━━━━━━━━━
 📦 *Sản phẩm:* ${order.productName}
 🔖 *Hình thức:* ${order.variantForm}
@@ -90,7 +97,15 @@ ${order.paymentDetails ? `
 // ============================================================
 // EMAIL NOTIFICATION (dùng EmailJS)
 // ============================================================
-export const sendEmailNotification = async (order: OrderNotificationData): Promise<void> => {
+export const sendEmailNotification = async (
+  order: OrderNotificationData,
+  // Gmail riêng của shop phụ phát sinh đơn (nếu có). Gmail này
+  // chỉ nhận đơn của RIÊNG shop đó, vì CheckoutPage chỉ truyền
+  // vào đây Gmail của đúng shop phát sinh đơn, không truyền
+  // Gmail của shop khác. Gmail của admin chính (trong .env)
+  // vẫn nhận tất cả các đơn như cũ, không bị cắt.
+  extraEmails: string[] = []
+): Promise<void> => {
   const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
   const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
   const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
@@ -101,7 +116,15 @@ export const sendEmailNotification = async (order: OrderNotificationData): Promi
     return;
   }
 
-  const emailList = notifyEmails ? notifyEmails.split(',').map((e: string) => e.trim()) : [];
+  const emailList: string[] = notifyEmails ? notifyEmails.split(',').map((e: string) => e.trim()).filter(Boolean) : [];
+  // Gộp Gmail riêng của shop phụ vào, bỏ trùng với Gmail chính
+  // (so sánh không phân biệt hoa/thường) để khỏi gửi 2 lần.
+  for (const e of extraEmails) {
+    const trimmed = (e || '').trim();
+    if (trimmed && !emailList.some((x: string) => x.toLowerCase() === trimmed.toLowerCase())) {
+      emailList.push(trimmed);
+    }
+  }
   if (emailList.length === 0) {
     console.warn('Chưa có email nhận thông báo. Thêm VITE_NOTIFY_EMAILS vào .env.local');
     return;
@@ -157,10 +180,24 @@ export const sendEmailNotification = async (order: OrderNotificationData): Promi
 
 // ============================================================
 // HÀM TỔNG HỢP: Gửi tất cả thông báo cùng lúc
+// routing:
+// - sendTelegram: true = gửi lên luồng Telegram chung (mặc định
+//   khi không truyền routing, giữ đúng hành vi cũ). Shop chính
+//   luôn truyền true. Shop phụ chỉ truyền true khi admin chính
+//   đã bật telegram_enabled cho shop đó, mặc định là false.
+//   Lưu ý: công tắc này chỉ quyết định bot CÓ GỬI đơn này lên
+//   luồng chung hay không; ai đang ở trong nhóm Telegram chung
+//   thì vẫn thấy mọi tin đã gửi lên đó, nên tắt công tắc rồi
+//   mà chưa mời phụ đó ra khỏi nhóm thì họ vẫn thấy tin mới.
+// - extraEmails: Gmail riêng của shop phụ phát sinh đơn.
 // ============================================================
-export const sendAllNotifications = async (order: OrderNotificationData): Promise<void> => {
+export const sendAllNotifications = async (
+  order: OrderNotificationData,
+  routing: { sendTelegram?: boolean; extraEmails?: string[] } = {}
+): Promise<void> => {
+  const sendTelegram = routing.sendTelegram !== false;
   await Promise.allSettled([
-    sendTelegramNotification(order),
-    sendEmailNotification(order)
+    sendTelegram ? sendTelegramNotification(order) : Promise.resolve(),
+    sendEmailNotification(order, routing.extraEmails || [])
   ]);
 };
