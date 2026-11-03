@@ -11,6 +11,18 @@ export interface User {
   shop_slug?: string | null;
   shop_name?: string | null;
   created_by?: string | null;
+  // THÔNG BÁO ĐƠN HÀNG của shop phụ, chỉ admin chính đặt ở tab
+  // Admin phụ. Cố tình lưu ở đây (document users) chứ KHÔNG lưu
+  // ở shop_settings: nút Lưu ở tab Admin phụ từng ghi shop_settings
+  // thì bị Firestore báo "Missing or insufficient permissions",
+  // trong khi ghi users thì chạy được từ trước tới giờ, nên dời
+  // 2 field này sang users là khỏi cần sửa Rules.
+  // - notify_email: Gmail chỉ nhận đơn của RIÊNG shop này.
+  //   Để trống = không gửi Gmail cho phụ.
+  // - telegram_enabled: mặc định tắt. Bật = đơn shop này gửi lên
+  //   luồng Telegram chung (1 bot + 1 chat của admin chính).
+  notify_email?: string;
+  telegram_enabled?: boolean;
 }
 
 export interface ProductVariant {
