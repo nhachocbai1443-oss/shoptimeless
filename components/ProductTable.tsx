@@ -220,7 +220,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
         key={product.id}
         data-product-id={product.id}
         data-category={rowCategory}
-        className="border-t border-gray-50 hover:bg-gray-50/30 transition-all duration-150"
+        className="border-t border-slate-100 hover:bg-indigo-50/60 transition-all duration-150"
         style={{
           // Hàng đang kéo: nổi lên, mờ nhẹ, nền hồng nhạt.
           // Hàng đích: vạch hồng dày ở đúng mép sẽ chèn vào
@@ -265,7 +265,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
         )}
         <td className="px-6 py-4">
           <div className="flex items-center gap-4">
-            <div className="relative w-14 h-14 rounded-2xl overflow-hidden border border-gray-100 bg-white shadow-sm group shrink-0">
+            <div className="relative w-14 h-14 rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-md group shrink-0">
               <img 
                 src={product.image_url || 'https://picsum.photos/seed/premium/200/200'} 
                 alt={product.name}
@@ -448,7 +448,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
 
   const renderTableHeader = (showNotes: boolean, hideCategory = false) => (
     <thead>
-      <tr className="bg-gray-50/50 text-gray-500 font-cute text-sm uppercase tracking-wider">
+      <tr className="bg-slate-900 text-slate-100 font-cute text-sm uppercase tracking-wider">
         {showSortOrder && <th className="px-3 py-4 font-bold text-center">STT</th>}
         <th className="px-6 py-4 font-bold">Sản phẩm</th>
         {showCategory && !hideCategory && <th className="px-6 py-4 font-bold">Danh mục</th>}
@@ -482,7 +482,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
 
     if (products.length === 0) {
       return (
-        <div className="w-full bg-white rounded-3xl border border-gray-100 shadow-sm px-6 py-12 text-center text-gray-400 italic">
+        <div className="w-full bg-white rounded-3xl border border-slate-200 shadow-[0_24px_50px_-28px_rgba(15,23,42,0.30)] px-6 py-12 text-center text-gray-400 italic">
           Chưa có sản phẩm nào được đăng...
         </div>
       );
@@ -538,7 +538,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                 <span className="ml-auto text-xs text-gray-300 font-mono">{catProducts.length} sản phẩm</span>
               </div>
 
-              <div className="w-full overflow-x-auto bg-white rounded-3xl border border-gray-100 shadow-sm">
+              <div className="w-full overflow-x-auto bg-white rounded-3xl border border-slate-200 shadow-[0_24px_50px_-28px_rgba(15,23,42,0.30)]">
                 <table className="w-full text-left border-collapse">
                   {renderTableHeader(hasNotes, true)}
                   <tbody className="font-body">
@@ -588,7 +588,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
   const hasNotes = customerProducts.some(p => p.notes && p.notes.trim() !== '');
 
   return (
-    <div className="w-full overflow-x-auto bg-white rounded-3xl border border-gray-100 shadow-sm">
+    <div className="w-full overflow-x-auto bg-white rounded-3xl border border-slate-200 shadow-[0_24px_50px_-28px_rgba(15,23,42,0.30)]">
       <table className="w-full text-left border-collapse">
         {renderTableHeader(hasNotes)}
         <tbody className="font-body">
