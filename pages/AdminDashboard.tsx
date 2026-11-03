@@ -918,44 +918,23 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
               </button>
             </div>
 
-            <div className="bg-white/90 backdrop-blur-sm p-8 rounded-[40px] border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)] overflow-x-auto">
+            <div className="bg-white/90 backdrop-blur-sm p-8 rounded-[40px] border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)]">
               <h3 className="text-2xl font-cute font-bold text-primary mb-6">Danh sách admin phụ</h3>
               {loadingSubadmins ? (
                 <div className="text-center py-10 text-gray-400">Đang tải...</div>
               ) : subadmins.length === 0 ? (
                 <div className="text-center py-10 text-gray-400 italic">Chưa có admin phụ nào...</div>
               ) : (
-                <table className="w-full text-left border-collapse min-w-[1100px]">
-                  <thead>
-                    <tr className="bg-gray-50/50 text-gray-500 font-cute text-xs uppercase tracking-wider">
-                      <th className="px-4 py-3 font-bold">Username</th>
-                      <th className="px-4 py-3 font-bold">Tên shop</th>
-                      <th className="px-4 py-3 font-bold">Mã link / Link shop</th>
-                      <th className="px-4 py-3 font-bold">Gmail nhận đơn của shop này</th>
-                      <th className="px-4 py-3 font-bold text-center">Telegram chung</th>
-                      <th className="px-4 py-3 font-bold text-center">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-sm">
+                <div className="space-y-4">
                     {subadmins.map((sub) => {
                       const edit = editingSub[sub.id] || { shop_name: sub.shop_name || '', shop_slug: sub.shop_slug || '', notify_email: '', telegram_enabled: false };
                       return (
-                        <tr key={sub.id} className="border-t border-gray-50">
-                          <td className="px-4 py-4 font-bold text-gray-800">{sub.username}</td>
-                          <td className="px-4 py-4">
-                            <input
-                              value={edit.shop_name}
-                              onChange={(e) => setEditingSub((prev) => ({ ...prev, [sub.id]: { ...edit, shop_name: e.target.value } }))}
-                              className="px-3 py-2 rounded-xl border border-gray-200 focus:outline-none w-full"
-                            />
-                          </td>
-                          <td className="px-4 py-4">
-                            <input
-                              value={edit.shop_slug}
-                              onChange={(e) => setEditingSub((prev) => ({ ...prev, [sub.id]: { ...edit, shop_slug: e.target.value } }))}
-                              className="px-3 py-2 rounded-xl border border-gray-200 focus:outline-none w-full font-mono"
-                            />
-                            <div className="text-xs text-gray-400 mt-1 break-all">{sub.shop_slug ? shopLink(sub.shop_slug) : ''}</div>
+                        <div key={sub.id} className="border border-gray-100 rounded-3xl p-5 space-y-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <span className="font-bold text-gray-800 text-base">{sub.username}</span>
+                              <div className="text-xs text-gray-400 mt-0.5 break-all">{sub.shop_slug ? shopLink(sub.shop_slug) : ''}</div>
+                            </div>
                             <button
                               onClick={() => {
                                 const slug = sub.shop_slug;
@@ -966,52 +945,70 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
                                   );
                                 }
                               }}
-                              className="text-xs text-primary font-bold hover:underline mt-1"
+                              className="text-xs text-primary font-bold hover:underline whitespace-nowrap"
                             >
                               📋 Sao chép link
                             </button>
-                          </td>
-                          <td className="px-4 py-4">
+                          </div>
+                          <div className="grid md:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-sm font-bold text-gray-700 mb-1 ml-1">Tên shop</label>
+                              <input
+                                value={edit.shop_name}
+                                onChange={(e) => setEditingSub((prev) => ({ ...prev, [sub.id]: { ...edit, shop_name: e.target.value } }))}
+                                className="px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-bold text-gray-700 mb-1 ml-1">Mã link</label>
+                              <input
+                                value={edit.shop_slug}
+                                onChange={(e) => setEditingSub((prev) => ({ ...prev, [sub.id]: { ...edit, shop_slug: e.target.value } }))}
+                                className="px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none w-full font-mono"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1 ml-1">Gmail nhận đơn của shop này</label>
                             <input
                               type="email"
                               value={edit.notify_email}
                               onChange={(e) => setEditingSub((prev) => ({ ...prev, [sub.id]: { ...edit, notify_email: e.target.value } }))}
                               placeholder="Gmail nhận đơn shop này..."
-                              className="px-3 py-2 rounded-xl border border-gray-200 focus:outline-none w-full"
+                              className="px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none w-full"
                             />
                             <div className="text-xs text-gray-400 mt-1">Chỉ nhận đơn của riêng shop này. Để trống = không gửi Gmail cho phụ.</div>
-                          </td>
-                          <td className="px-4 py-4 text-center whitespace-nowrap">
-                            <label className="inline-flex flex-col items-center gap-1 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={!!edit.telegram_enabled}
-                                onChange={(e) => setEditingSub((prev) => ({ ...prev, [sub.id]: { ...edit, telegram_enabled: e.target.checked } }))}
-                                className="w-5 h-5 accent-pink-600"
-                              />
-                              <span className="text-xs font-bold text-gray-600">{edit.telegram_enabled ? 'Đang bật' : 'Đang tắt'}</span>
-                            </label>
-                            <div className="text-xs text-gray-400 mt-1 normal-case font-normal">Bật = đơn shop này gửi lên luồng Telegram chung (1 bot + 1 chat của bạn). Đơn shop chính luôn gửi lên đó.</div>
-                          </td>
-                          <td className="px-4 py-4 text-center whitespace-nowrap">
+                          </div>
+                          <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={!!edit.telegram_enabled}
+                              onChange={(e) => setEditingSub((prev) => ({ ...prev, [sub.id]: { ...edit, telegram_enabled: e.target.checked } }))}
+                              className="w-5 h-5 accent-pink-600 mt-0.5 shrink-0"
+                            />
+                            <span>
+                              <span className="block text-sm font-bold text-gray-700">Telegram chung: {edit.telegram_enabled ? 'Đang bật' : 'Đang tắt'}</span>
+                              <span className="block text-xs text-gray-400 mt-0.5">Bật = đơn shop này gửi lên luồng Telegram chung (1 bot + 1 chat của bạn). Đơn shop chính luôn gửi lên đó.</span>
+                            </span>
+                          </label>
+                          <div className="flex flex-wrap gap-2 pt-1">
                             <button
                               onClick={() => handleSaveSubadmin(sub)}
-                              className="bg-green-50 text-green-600 px-3 py-2 rounded-xl font-bold text-xs mr-2"
+                              className="bg-green-50 text-green-600 px-4 py-2 rounded-xl font-bold text-xs"
                             >
                               💾 Lưu
                             </button>
                             <button
                               onClick={() => handleDeleteSubadmin(sub)}
-                              className="bg-red-50 text-red-600 px-3 py-2 rounded-xl font-bold text-xs"
+                              className="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-bold text-xs"
                             >
                               🗑️ Xóa shop
                             </button>
-                          </td>
-                        </tr>
+                          </div>
+                        </div>
                       );
                     })}
-                  </tbody>
-                </table>
+                </div>
               )}
             </div>
           </div>
