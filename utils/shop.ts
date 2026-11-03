@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, getDocs, query, where, addDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, doc, getDoc, writeBatch, deleteField } from 'firebase/firestore';
 import { Product, User, Category } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -52,12 +52,16 @@ export const productsOfShop = (all: Product[], slug: string | null | undefined):
   slug ? all.filter((p) => p.shop_slug === slug) : all.filter((p) => !p.shop_slug);
 
 // Bản sao của 1 sản phẩm để ghi sang shop khác: bỏ id cũ, ghi mã
-// shop mới, tạo ngày mới. Giá, ảnh, biến thể, ghi chú giữ nguyên.
+// shop mới, tạo ngày mới, và ghi copied_from = id sản phẩm gốc.
+// copied_from là sợi dây để sau này chính sửa giá CTV thì tìm
+// đúng bản sao của sản phẩm đó mà truyền giá CTV sang, không cần
+// đoán theo tên. Giá, ảnh, biến thể, ghi chú giữ nguyên.
 export const copyProductForShop = (p: Product, slug: string): any => {
   const { id, ...rest } = p as any;
   return {
     ...rest,
     shop_slug: slug,
+    copied_from: id,
     created_at: new Date().toISOString(),
   };
 };
@@ -136,6 +140,8 @@ export const getShopSettings = async (slug: string): Promise<ShopSettings | null
 // các shop phụ đã có. Chỉ chạy khi tạo mới ở shop chính, không chạy
 // khi sửa sản phẩm cũ, không chạy khi admin phụ thêm sản phẩm.
 // Lỗi sao chép 1 shop thì không làm hỏng việc tạo sản phẩm chính.
+// Bản sao cũng ghi copied_from = id sản phẩm chính vừa tạo (nếu
+// bên gọi đã truyền id vào), để sau này truyền giá CTV được.
 export const fanOutNewMainProduct = async (productData: any): Promise<void> => {
   try {
     const subs = await fetchSubAdmins();
@@ -143,16 +149,95 @@ export const fanOutNewMainProduct = async (productData: any): Promise<void> => {
     for (const sub of subs) {
       if (!sub.shop_slug) continue;
       try {
-        await addDoc(collection(db, 'products'), {
+        const copy: any = {
           ...rest,
           shop_slug: sub.shop_slug,
           created_at: new Date().toISOString(),
-        });
+        };
+        if (id) copy.copied_from = id;
+        await addDoc(collection(db, 'products'), copy);
       } catch (err) {
         console.error('Fan-out new product to shop failed:', sub.shop_slug, err);
       }
     }
   } catch (err) {
     console.error('Fan-out new product failed:', err);
+  }
+};
+
+// Giá CTV ở shop phụ phải LUÔN theo giá CTV của chính. Vì admin
+// phụ không được sửa giá CTV, nên mỗi lần chính sửa sản phẩm là
+// giá CTV (chung + riêng ctvtime, cả ở biến thể) tự truyền sang
+// các bản sao ở shop phụ. Chỉ truyền đúng giá CTV, KHÔNG truyền
+// giá Public, tên, ảnh, danh mục hay thứ tự — những thứ đó ở shop
+// phụ vẫn tách riêng như cũ.
+// Tìm bản sao bằng 2 cách, theo thứ tự:
+//  1. copied_from == id sản phẩm chính (bản sao mới, đã có dây
+//     nối từ lúc sao chép).
+//  2. Bản sao cũ chưa có copied_from: khớp tên + danh mục LÚC
+//     CHƯA SỬA (tên/danh mục trước khi chính sửa lần này), vì
+//     bản sao giữ nguyên tên/danh mục lúc sao chép. Khớp được
+//     thì ghi luôn copied_from vào bản sao đó, lần sau khỏi đoán.
+// Bản sao mà admin phụ đã đổi tên trước đây thì cách 2 không khớp
+// được — đó là giới hạn duy nhất, các bản sao còn lại đều khớp.
+// Hàm này không bao giờ ném lỗi ra ngoài (best-effort): truyền
+// hỏng thì sản phẩm chính vẫn đã lưu xong, không làm hỏng việc lưu.
+export const propagateCtvPriceToSubShops = async (original: {
+  id: string;
+  name: string;
+  category: string;
+  price_ctv: number;
+  price_ctvtime?: number;
+  variants: any[];
+}): Promise<void> => {
+  try {
+    const snap = await getDocs(collection(db, 'products'));
+    const batch = writeBatch(db);
+    let count = 0;
+    snap.docs.forEach((d) => {
+      const data: any = d.data();
+      if (!data.shop_slug) return;
+      const isLinked = data.copied_from === original.id;
+      const isLegacy =
+        !data.copied_from &&
+        data.name === original.name &&
+        (data.category || 'Khác') === (original.category || 'Khác');
+      if (!isLinked && !isLegacy) return;
+
+      const update: any = {
+        price_ctv: Number(original.price_ctv) || 0,
+      };
+      if (original.price_ctvtime !== undefined && original.price_ctvtime !== null && Number(original.price_ctvtime) > 0) {
+        update.price_ctvtime = Number(original.price_ctvtime);
+      } else {
+        update.price_ctvtime = deleteField();
+      }
+      // Biến thể: chỉ đổi giá CTV của biến thể khớp tên hình thức,
+      // giữ nguyên giá Public và hình thức của bản sao. Biến thể
+      // mới ở chính (chưa có ở bản sao) và biến thể riêng của phụ
+      // thì không động tới.
+      if (Array.isArray(data.variants)) {
+        update.variants = data.variants.map((v: any) => {
+          const mainVariant = (original.variants || []).find((mv: any) => mv.form === v.form);
+          if (!mainVariant) return v;
+          const cleaned: any = {
+            ...v,
+            price_ctv: Number(mainVariant.price_ctv) || 0,
+          };
+          if (mainVariant.price_ctvtime !== undefined && mainVariant.price_ctvtime !== null && Number(mainVariant.price_ctvtime) > 0) {
+            cleaned.price_ctvtime = Number(mainVariant.price_ctvtime);
+          } else {
+            delete cleaned.price_ctvtime;
+          }
+          return cleaned;
+        });
+      }
+      if (isLegacy) update.copied_from = original.id;
+      batch.update(doc(db, 'products', d.id), update);
+      count += 1;
+    });
+    if (count > 0) await batch.commit();
+  } catch (err) {
+    console.error('Propagate CTV price to sub shops failed:', err);
   }
 };
