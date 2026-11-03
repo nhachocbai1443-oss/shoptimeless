@@ -194,7 +194,7 @@ const ShopPage: React.FC<Props> = ({ user }) => {
           {/* Dòng giới thiệu "Trang sản phẩm riêng..." đã bỏ theo
               yêu cầu: chỉ còn tên shop, gọn và chuyên nghiệp hơn. */}
           <h2 className="text-3xl font-cute font-bold text-gray-900 flex items-center gap-3">
-            <span className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center shadow-md shrink-0">
+            <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-pink-500 via-fuchsia-500 to-violet-500 flex items-center justify-center shadow-md shadow-pink-200 shrink-0">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 9l1.5-4.5A2 2 0 0 1 6.4 3h11.2a2 2 0 0 1 1.9 1.5L21 9" />
                 <path d="M3 9h18" />
