@@ -123,23 +123,12 @@ export interface ShopSettings {
   payment_methods?: any[];
   categories?: Category[];
   contact_links?: ContactLinks;
-  // THÔNG BÁO ĐƠN HÀNG RIÊNG CỦA SHOP PHỤ — chỉ admin chính
-  // đặt được ở tab Admin phụ, admin phụ không thấy/không sửa
-  // được 2 mục này (tab Admin phụ chỉ hiện với admin chính, và
-  // nút Lưu ở tab Cài đặt của shop phụ dùng merge nên không xóa
-  // được 2 mục này):
-  // - notify_email: Gmail nhận thông báo đơn của RIÊNG shop này.
-  //   Để trống = shop này không gửi Gmail cho phụ, chỉ gửi về
-  //   Gmail của admin chính (danh sách trong .env) như cũ.
-  // - telegram_enabled: mặc định TẮT (false / không có = tắt).
-  //   Bật = đơn của shop này được gửi lên luồng Telegram CHUNG
-  //   (1 bot + 1 chat của admin chính, xem notifications.ts).
-  //   Đơn của shop chính luôn gửi lên Telegram chung, nên phụ
-  //   nào ở trong nhóm Telegram chung sẽ thấy cả đơn shop chính
-  //   lẫn đơn của các shop phụ đã bật — đó chính là ý "chung
-  //   1 luồng" mà bạn chốt, không phải Telegram riêng từng phụ.
-  notify_email?: string;
-  telegram_enabled?: boolean;
+  // Lưu ý: cài đặt thông báo đơn (notify_email, telegram_enabled)
+  // KHÔNG nằm ở đây mà nằm trên document users của admin phụ
+  // (xem types.ts). Bản trước từng lưu 2 mục này ở shop_settings
+  // thì nút Lưu bị Firestore chặn "Missing or insufficient
+  // permissions", trong khi ghi users chạy được, nên đã dời sang
+  // users để khỏi cần sửa Rules.
 }
 
 export const getShopSettings = async (slug: string): Promise<ShopSettings | null> => {
@@ -149,6 +138,29 @@ export const getShopSettings = async (slug: string): Promise<ShopSettings | null
     return snap.data() as ShopSettings;
   } catch (err) {
     console.error('Error loading shop settings:', err);
+    return null;
+  }
+};
+
+// Cài đặt thông báo đơn của 1 shop phụ, đọc từ document users
+// của admin phụ sở hữu shop đó (không phải shop_settings — xem
+// lý do ở types.ts). Không tìm thấy phụ thì trả null, tức là
+// Gmail trống + Telegram tắt, đơn vẫn gửi về admin chính như cũ.
+export const getSubadminNotifySettings = async (
+  slug: string
+): Promise<{ notify_email: string; telegram_enabled: boolean } | null> => {
+  try {
+    const snap = await getDocs(
+      query(collection(db, 'users'), where('shop_slug', '==', slug), where('role', '==', 'subadmin'))
+    );
+    if (snap.empty) return null;
+    const data: any = snap.docs[0].data();
+    return {
+      notify_email: (data.notify_email || '').trim(),
+      telegram_enabled: data.telegram_enabled === true,
+    };
+  } catch (err) {
+    console.error('Error loading subadmin notification settings:', err);
     return null;
   }
 };
