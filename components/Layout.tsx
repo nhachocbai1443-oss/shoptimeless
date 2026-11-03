@@ -1,15 +1,67 @@
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { User } from '../types';
+import { RESERVED_SLUGS, getShopSettings, DEFAULT_CONTACT_LINKS, ContactLinks } from '../utils/shop';
 
 interface LayoutProps {
   children: React.ReactNode;
   user: User | null;
   onLogout: () => void;
+  // Trang checkout là route chung (/#/checkout/:id) nên không đọc
+  // được mã shop từ đường link; App truyền mã shop của sản phẩm
+  // đang checkout vào đây để nút liên hệ hiện đúng của shop đó.
+  checkoutShopSlug?: string | null;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
+const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, checkoutShopSlug }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Nút liên hệ nổi: ban đầu hiện link mặc định của web, rồi tải
+  // link thật theo shop đang xem (xem useEffect dưới).
+  const [contactLinks, setContactLinks] = useState<ContactLinks>(DEFAULT_CONTACT_LINKS);
+
+  useEffect(() => {
+    const loadContactLinks = async () => {
+      try {
+        // Xác định shop đang xem từ đường link: /{slug},
+        // /{slug}/admin, /{slug}/admin/product/... đều là shop
+        // phụ; các route hệ thống (admin, login, checkout, ...)
+        // thì không phải shop. Trang checkout dùng mã shop mà
+        // App truyền vào (vì route checkout không chứa mã shop).
+        const firstSegment = location.pathname.replace(/^\//, '').split('/')[0] || '';
+        let shopSlug: string | null = null;
+        if (firstSegment === 'checkout' && checkoutShopSlug) {
+          shopSlug = checkoutShopSlug;
+        } else if (firstSegment && !RESERVED_SLUGS.includes(firstSegment) && firstSegment !== 'product') {
+          shopSlug = firstSegment;
+        }
+        let links: ContactLinks | undefined;
+        if (shopSlug) {
+          const shopSettings = await getShopSettings(shopSlug);
+          if (shopSettings?.contact_links) links = shopSettings.contact_links;
+        }
+        if (!links) {
+          const mainSnap = await getDoc(doc(db, 'app_settings', '1'));
+          if (mainSnap.exists() && mainSnap.data().contact_links) {
+            links = mainSnap.data().contact_links;
+          }
+        }
+        if (links) {
+          setContactLinks({
+            messenger: links.messenger || '',
+            zalo: links.zalo || '',
+            telegram: links.telegram || '',
+          });
+        }
+      } catch (err) {
+        console.error('Error loading contact links:', err);
+      }
+    };
+    loadContactLinks();
+  }, [location.pathname, checkoutShopSlug]);
 
   return (
     <div className="min-h-screen flex flex-col items-center relative">
@@ -76,35 +128,43 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         {children}
       </main>
 
-      {/* Floating Contact Icons */}
+      {/* Floating Contact Icons — link lấy từ cài đặt của shop
+          đang xem (shop chính hoặc shop phụ), để trống 1 link
+          trong cài đặt thì nút đó không hiện nữa. */}
       <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-4 animate-fade-in">
-        <a 
-          href="https://www.facebook.com/messages/t/971626916025287" 
-          target="_blank" 
-          rel="noreferrer"
-          className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full shadow-lg flex items-center justify-center text-white text-2xl hover:scale-110 transition-transform border-2 border-white"
-          title="Messenger"
-        >
-          <img src="https://upload.wikimedia.org/wikipedia/commons/b/be/Facebook_Messenger_logo_2020.svg" alt="Messenger" className="w-8 h-8" />
-        </a>
-        <a 
-          href="https://zalo.me/0528173022" 
-          target="_blank" 
-          rel="noreferrer"
-          className="w-14 h-14 bg-blue-500 rounded-full shadow-lg flex items-center justify-center text-white text-2xl hover:scale-110 transition-transform border-2 border-white"
-          title="Zalo"
-        >
-          <img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg" alt="Zalo" className="w-8 h-8" />
-        </a>
-        <a 
-          href="https://t.me/thienduong1443" 
-          target="_blank" 
-          rel="noreferrer"
-          className="w-14 h-14 bg-[#229ED9] rounded-full shadow-lg flex items-center justify-center text-white text-2xl hover:scale-110 transition-transform border-2 border-white"
-          title="Telegram"
-        >
-         <img src="https://upload.wikimedia.org/wikipedia/commons/5/5a/Telegram_2019_simple_logo.svg" alt="Telegram" className="w-8 h-8" />
-        </a>
+        {contactLinks.messenger && (
+          <a
+            href={contactLinks.messenger}
+            target="_blank"
+            rel="noreferrer"
+            className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full shadow-lg flex items-center justify-center text-white text-2xl hover:scale-110 transition-transform border-2 border-white"
+            title="Messenger"
+          >
+            <img src="https://upload.wikimedia.org/wikipedia/commons/b/be/Facebook_Messenger_logo_2020.svg" alt="Messenger" className="w-8 h-8" />
+          </a>
+        )}
+        {contactLinks.zalo && (
+          <a
+            href={contactLinks.zalo}
+            target="_blank"
+            rel="noreferrer"
+            className="w-14 h-14 bg-blue-500 rounded-full shadow-lg flex items-center justify-center text-white text-2xl hover:scale-110 transition-transform border-2 border-white"
+            title="Zalo"
+          >
+            <img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg" alt="Zalo" className="w-8 h-8" />
+          </a>
+        )}
+        {contactLinks.telegram && (
+          <a
+            href={contactLinks.telegram}
+            target="_blank"
+            rel="noreferrer"
+            className="w-14 h-14 bg-[#229ED9] rounded-full shadow-lg flex items-center justify-center text-white text-2xl hover:scale-110 transition-transform border-2 border-white"
+            title="Telegram"
+          >
+           <img src="https://upload.wikimedia.org/wikipedia/commons/5/5a/Telegram_2019_simple_logo.svg" alt="Telegram" className="w-8 h-8" />
+          </a>
+        )}
       </div>
 
       {/* Footer */}
