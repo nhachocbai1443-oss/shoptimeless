@@ -4,7 +4,7 @@ import { Product, ProductVariant, PaymentMethod, User } from '../types';
 import { db } from '../firebase';
 import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { sendAllNotifications } from '../utils/notifications';
-import { getShopSettings } from '../utils/shop';
+import { getShopSettings, getSubadminNotifySettings } from '../utils/shop';
 
 interface Props {
   user: User | null;
@@ -176,8 +176,8 @@ const CheckoutPage: React.FC<Props> = ({ user, onProductShopSlug }) => {
       let subTelegramEnabled = false;
       if (orderShopSlug) {
         try {
-          const notifySettings = await getShopSettings(orderShopSlug);
-          if (notifySettings?.notify_email?.trim()) subNotifyEmail = notifySettings.notify_email.trim();
+          const notifySettings = await getSubadminNotifySettings(orderShopSlug);
+          if (notifySettings?.notify_email) subNotifyEmail = notifySettings.notify_email;
           subTelegramEnabled = notifySettings?.telegram_enabled === true;
         } catch (err) {
           console.error('Error loading shop notification settings:', err);
