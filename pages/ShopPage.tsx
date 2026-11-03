@@ -59,6 +59,20 @@ const ShopPage: React.FC<Props> = ({ user }) => {
           // Sản phẩm đang ẩn thì khách không thấy, chỉ admin phụ
           // chủ shop mới thấy để kiểm tra.
           .filter((p) => isOwner || !p.is_hidden)
+          // Chuẩn hóa giá: sản phẩm nào thiếu giá thì về 0 thay
+          // vì để undefined làm crash trang. Không ghi gì về
+          // Firestore hay localStorage ở đây, chỉ chuẩn hóa lúc
+          // hiển thị để admin phụ vào sửa giá sau được.
+          .map((p) => ({
+            ...p,
+            price_public: Number((p as any).price_public) || 0,
+            price_ctv: Number((p as any).price_ctv) || 0,
+            variants: (p.variants || []).map((v: any) => ({
+              ...v,
+              price_public: Number(v.price_public) || 0,
+              price_ctv: Number(v.price_ctv) || 0,
+            })),
+          }))
           .sort((a, b) => {
             if (b.is_hot === a.is_hot) return (a.sort_order || 0) - (b.sort_order || 0);
             return b.is_hot ? 1 : -1;
