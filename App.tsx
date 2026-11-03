@@ -286,9 +286,13 @@ function App() {
     ensureFirebaseSession();
   };
 
+  // Mã shop của sản phẩm đang checkout (để Layout hiện nút liên
+  // hệ đúng của shop đó, vì route checkout không chứa mã shop).
+  const [checkoutShopSlug, setCheckoutShopSlug] = useState<string | null>(null);
+
   return (
     <HashRouter>
-      <Layout user={user} onLogout={handleLogout}>
+      <Layout user={user} onLogout={handleLogout} checkoutShopSlug={checkoutShopSlug}>
         <PageErrorBoundary>
         <Routes>
           {/* Mở link gốc mà đang đăng nhập sẵn admin thì tự chuyển
@@ -342,7 +346,7 @@ function App() {
             }
           />
 
-          <Route path="/checkout/:productId" element={<CheckoutPage user={user} />} />
+          <Route path="/checkout/:productId" element={<CheckoutPage user={user} onProductShopSlug={setCheckoutShopSlug} />} />
 
           <Route path="/product-notes/:productId" element={<ProductNotesPage />} />
 
