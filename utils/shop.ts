@@ -194,12 +194,16 @@ export const fanOutNewMainProduct = async (productData: any): Promise<void> => {
   }
 };
 
-// Giá CTV ở shop phụ phải LUÔN theo giá CTV của chính. Vì admin
-// phụ không được sửa giá CTV, nên mỗi lần chính sửa sản phẩm là
-// giá CTV (chung + riêng ctvtime, cả ở biến thể) tự truyền sang
-// các bản sao ở shop phụ. Chỉ truyền đúng giá CTV, KHÔNG truyền
-// giá Public, tên, ảnh, danh mục hay thứ tự — những thứ đó ở shop
-// phụ vẫn tách riêng như cũ.
+// Truyền giá CTV từ chính sang shop phụ — NHƯNG CHỈ LUỒNG CỦA
+// CHÍNH (giá CTV chung + riêng ctvtime, cả ở biến thể), để CTV
+// của chính vào shop phụ vẫn thấy giá chính mới nhất. Hàm này
+// chỉ ghi đúng các field luồng chính, KHÔNG BAO GIỜ động tới
+// price_ctv_sub (giá CTV riêng của shop phụ, do admin phụ đặt
+// cho CTV của mình). Nhờ vậy 2 luồng giá không ghi đè nhau:
+// chính sửa giá thì CTV chính ở shop phụ thấy giá mới, còn giá
+// CTV phụ vẫn giữ nguyên. Không truyền giá Public, tên, ảnh,
+// danh mục hay thứ tự — những thứ đó ở shop phụ vẫn tách riêng
+// như cũ.
 // Tìm bản sao bằng 2 cách, theo thứ tự:
 //  1. copied_from == id sản phẩm chính (bản sao mới, đã có dây
 //     nối từ lúc sao chép).
