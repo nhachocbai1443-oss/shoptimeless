@@ -36,7 +36,15 @@ const ProductTable: React.FC<ProductTableProps> = ({
   const navigate = useNavigate();
   const isAdmin = user?.role === 'admin' || forceAdminView;
   const isCTV = user?.role === 'ctv';
-  const isCtvtime = isCTV && user?.username === 'ctvtime';
+  // ctvtime là CTV đặc biệt CỦA CHÍNH (không gắn mã shop) nên
+  // mới được thấy giá riêng ctvtime. CTV phụ (có mã shop) thì
+  // không bao giờ rơi vào nhánh ctvtime, dù username có trùng.
+  const isCtvtime = isCTV && !user?.shop_slug && user?.username === 'ctvtime';
+  // CTV của shop phụ: chỉ thấy giá CTV riêng của shop phụ
+  // (price_ctv_sub), không thấy giá CTV chung của chính. CTV
+  // chính (không gắn mã shop) thì ngược lại, chỉ thấy giá CTV
+  // chung của chính. Hai luồng giá này tách riêng hoàn toàn.
+  const isSubCtv = isCTV && !!user?.shop_slug;
   const [selectedVariantIndices, setSelectedVariantIndices] = useState<Record<string, number>>({});
 
   // Kéo-thả chỉ bật ở bảng quản trị (nhóm theo danh mục + có onReorder).
@@ -188,16 +196,26 @@ const ProductTable: React.FC<ProductTableProps> = ({
   // thì rơi về giá còn lại, cuối cùng là 0, không bao giờ trả
   // undefined. Không lưu gì thêm vào localStorage, chỉ sửa cách
   // hiển thị, dữ liệu sản phẩm vẫn nằm ở Firestore như cũ.
+  // Hai luồng giá CTV (từ 04/11): CTV chính thấy giá CTV chung
+  // của chính (price_ctv, có giá riêng ctvtime thì ưu tiên),
+  // CTV phụ chỉ thấy giá CTV riêng của shop phụ (price_ctv_sub,
+  // chưa có thì rơi về giá Public — không rơi về giá CTV của
+  // chính để 2 luồng không lộ sang nhau).
   const getPrice = (
     price_public: number,
     price_ctv: number,
-    price_ctvtime?: number
+    price_ctvtime?: number,
+    price_ctv_sub?: number
   ): number => {
     const pub = Number(price_public) || 0;
     const ctv = Number(price_ctv) || 0;
     const ctvtime = Number(price_ctvtime) || 0;
+    const ctvSub = Number(price_ctv_sub) || 0;
     if (isCtvtime) {
       return ctvtime > 0 ? ctvtime : ctv > 0 ? ctv : pub;
+    }
+    if (isSubCtv) {
+      return ctvSub > 0 ? ctvSub : pub;
     }
     if (isCTV) {
       return ctv > 0 ? ctv : pub;
@@ -336,10 +354,14 @@ const ProductTable: React.FC<ProductTableProps> = ({
                 const variantIdx = selectedVariantIndices[product.id] ?? -1;
                 let price: number;
                 if (variantIdx === -1) {
-                  price = getPrice(product.price_public, product.price_ctv, product.price_ctvtime);
+                  price = getPrice(product.price_public, product.price_ctv, product.price_ctvtime, product.price_ctv_sub);
                 } else {
                   const v = product.variants![variantIdx];
-                  price = getPrice(v.price_public, v.price_ctv, v.price_ctvtime);
+                  // Biến thể chưa có giá CTV phụ riêng thì dùng
+                  // giá CTV phụ chung của sản phẩm (admin phụ chỉ
+                  // đặt 1 giá CTV chung cho cả sản phẩm, không đặt
+                  // riêng từng biến thể), cuối cùng mới về Public.
+                  price = getPrice(v.price_public, v.price_ctv, v.price_ctvtime, v.price_ctv_sub ?? product.price_ctv_sub);
                 }
                 return (Number(price) || 0).toLocaleString('vi-VN');
               })()}đ
