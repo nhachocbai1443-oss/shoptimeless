@@ -42,9 +42,13 @@ export const normalizeSlug = (raw: string): string =>
 export const isValidSlug = (slug: string): boolean =>
   /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug) && !RESERVED_SLUGS.includes(slug);
 
-// Link shop phụ. Web dùng HashRouter nên link có dạng /#/slug.
+// Link shop phụ để đưa cho người khác: luôn dùng domain che
+// www.studytimeless.io.vn (user chốt 04/11) thay vì domain hiện
+// tại, vì trang admin chính chỉ mở được trên shoptimeless.io.vn
+// (web chính bị chặn trên domain che) nên lấy origin lúc đó sẽ
+// ra link shoptimeless, không phải link muốn đưa.
 export const shopLink = (slug: string): string =>
-  `${window.location.origin}/#/${slug}`;
+  `https://www.studytimeless.io.vn/#/${slug}`;
 
 export const isMainProduct = (p: Product): boolean => !p.shop_slug;
 
