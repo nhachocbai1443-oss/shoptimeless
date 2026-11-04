@@ -30,6 +30,7 @@ export interface ProductVariant {
   price_public: number;
   price_ctv: number;
   price_ctvtime?: number; // Giá riêng cho CTV ctvtime (nếu không có thì dùng price_ctv)
+  price_ctv_sub?: number; // Giá CTV riêng của shop phụ cho biến thể này (do admin phụ đặt cho CTV của shop mình; CTV chính không thấy giá này)
 }
 
 export interface Product {
@@ -39,8 +40,9 @@ export interface Product {
   form: string; // Hình thức mặc định
   package: string; // Gói
   price_public: number; // Giá mặc định
-  price_ctv: number; // Giá CTV chung
+  price_ctv: number; // Giá CTV chung (luồng của chính: CTV chính thấy giá này ở cả shop chính lẫn shop phụ)
   price_ctvtime?: number; // Giá riêng cho CTV ctvtime (nếu không có thì dùng price_ctv)
+  price_ctv_sub?: number; // Giá CTV riêng của shop phụ (luồng của phụ: chỉ CTV của shop phụ đó thấy; admin phụ đặt trong form sửa sản phẩm, admin chính không bao giờ ghi đè)
   variants?: ProductVariant[]; // Các lựa chọn hình thức khác
   discount_percent?: number; // Phần trăm giảm giá
   is_hot?: boolean; // Sản phẩm hot
