@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { collection, doc, getDoc, addDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { uploadImageToSupabase } from '../supabase';
 import { Product, User, Category } from '../types';
-import { fanOutNewMainProduct, getShopSettings, propagateCtvPriceToSubShops } from '../utils/shop';
+import { fanOutNewMainProduct, getShopSettings } from '../utils/shop';
 
 interface Props {
   user: User;
@@ -287,20 +287,14 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
 
       if (isEdit) {
         await updateDoc(doc(db, 'products', productId!), productData);
-        // Chính sửa sản phẩm cũ: giá CTV phải luôn theo chính nên
-        // truyền giá CTV sang các bản sao ở shop phụ (chỉ giá CTV,
-        // không truyền giá Public hay các field khác). Admin phụ
-        // sửa thì không truyền đi đâu cả.
-        if (!isSubShop) {
-          await propagateCtvPriceToSubShops({
-            id: productId!,
-            name: originalProduct?.name ?? productData.name,
-            category: originalProduct?.category ?? productData.category,
-            price_ctv: productData.price_ctv,
-            price_ctvtime: productData.price_ctvtime,
-            variants: productData.variants,
-          });
-        }
+        // LUẬT 04/11: giá CTV của shop phụ ĐỘC LẬP HOÀN TOÀN với
+        // shop chính, không liên quan gì tới admin chính. Admin
+        // chính sửa giá CTV (chung hay ctvtime) cũng KHÔNG truyền
+        // sang các bản sao ở shop phụ nữa — giá CTV ở shop phụ
+        // chỉ thay đổi khi admin phụ tự sửa nó. (Luật cũ 19:21
+        // "giá CTV shop phụ luôn theo chính" đã bị luật này thay
+        // thế. Hàm propagateCtvPriceToSubShops trong utils/shop.ts
+        // vì vậy không còn được gọi ở đâu nữa.)
         alert('Đã cập nhật sản phẩm thành công!');
       } else {
         const newRef = await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
@@ -359,16 +353,9 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
 
             if (isEdit) {
               await updateDoc(doc(db, 'products', productId!), productData);
-              if (!isSubShop) {
-                await propagateCtvPriceToSubShops({
-                  id: productId!,
-                  name: originalProduct?.name ?? productData.name,
-                  category: originalProduct?.category ?? productData.category,
-                  price_ctv: productData.price_ctv,
-                  price_ctvtime: productData.price_ctvtime,
-                  variants: productData.variants,
-                });
-              }
+              // Không truyền giá CTV sang shop phụ nữa (luật 04/11:
+              // giá CTV shop phụ độc lập hoàn toàn với chính).
+              // Nhánh lưu lại này dùng chung luật với nhánh trên.
               alert('Đã cập nhật sản phẩm thành công!');
             } else {
               const newRef = await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
