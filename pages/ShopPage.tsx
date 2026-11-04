@@ -164,7 +164,16 @@ const ShopPage: React.FC<Props> = ({ user }) => {
   }
 
   const q = searchQuery.toLowerCase().trim();
+  // Sản phẩm chưa gán danh mục (category trống) thì KHÔNG hiện
+  // ngoài trang shop nữa. Trước đây nhóm sản phẩm theo
+  // `product.category || 'Khác'` nên 1 sản phẩm không có danh
+  // mục tự lòi ra thành mục "Khác" — mà "Khác" không phải danh
+  // mục trong Cài đặt nên nhìn rất lạc lõng. Sản phẩm đó vẫn còn
+  // trong dữ liệu và vẫn thấy ở tab Sản phẩm trong trang quản
+  // lý, muốn hiện lại thì vào đó gán danh mục thật cho nó, còn
+  // muốn xóa hẳn thì bấm Xóa nó ở đó.
   const filtered = products.filter((p) => {
+    if (!(p.category || '').trim()) return false;
     if (!q) return true;
     return (
       (p.name || '').toLowerCase().includes(q) ||
