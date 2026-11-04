@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { HashRouter, Routes, Route, Navigate, useParams, Link } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -63,12 +63,6 @@ function BlockedMainPage() {
         Domain này chỉ dùng cho các shop phụ. Bạn vui lòng mở đúng link shop phụ bạn nhận được,
         hoặc đăng nhập để vào shop của mình.
       </p>
-      <Link
-        to="/login"
-        className="mt-6 inline-block bg-primary text-white px-6 py-3 rounded-2xl font-bold shadow-md"
-      >
-        Đăng nhập
-      </Link>
     </div>
   );
 }
