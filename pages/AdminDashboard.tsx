@@ -1172,8 +1172,8 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
             </div>
 
             {/* Ghi chú về giá riêng cho ctvtime — chỉ shop chính.
-                Shop phụ không có giá riêng ctvtime: CTV của shop
-                phụ chỉ thấy giá CTV chung của shop mình. */}
+                Shop phụ không hiện ghi chú nào ở đây nữa (bỏ theo
+                yêu cầu 04/11). */}
             {!isSubShop && (
               <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-start gap-3">
                 <span className="text-amber-500 text-lg mt-0.5">💡</span>
@@ -1186,18 +1186,7 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
                 </div>
               </div>
             )}
-            {isSubShop && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-start gap-3">
-                <span className="text-amber-500 text-lg mt-0.5">💡</span>
-                <div>
-                  <p className="text-sm font-bold text-amber-700">CTV của shop phụ chỉ thấy giá CTV chung của shop này</p>
-                  <p className="text-xs text-amber-600 mt-0.5">
-                    Giá riêng <strong>ctvtime</strong> là của shop chính, không áp dụng cho CTV shop phụ.
-                    Để đặt giá CTV chung cho shop mình, vào <strong>Sản phẩm → Sửa sản phẩm</strong> (ô Giá CTV chung).
-                  </p>
-                </div>
-              </div>
-            )}
+
 
             <div className="bg-white/90 backdrop-blur-sm rounded-3xl border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)] overflow-hidden">
               <table className="w-full text-left">
