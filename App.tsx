@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { HashRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useParams, Link } from 'react-router-dom';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -33,6 +33,44 @@ function ShopProductFormPage({ user }: { user: User | null }) {
     return <Navigate to={`/${shopSlug}`} />;
   }
   return <ProductFormPage user={user} shopSlug={shopSlug} />;
+}
+
+// Chặn web chính trên domain lạ (user chốt 04/11: domain mới gắn
+// thêm chỉ mở shop phụ, không mở web chính). Web chính chỉ mở
+// được trên domain chính (cả www và apex) + localhost để chạy
+// thử ở máy mình. Mọi domain khác (domain mới gắn thêm, link
+// vercel.app...) đều bị chặn web chính: trang chủ chính (/) và
+// trang quản trị chính (/admin...) chỉ hiện thông báo bên dưới,
+// KHÔNG redirect để khỏi lặp điều hướng (ví dụ /admin mà
+// redirect về / thì / lại redirect về /admin). Các link shop phụ,
+// trang quản lý shop phụ, trang đăng nhập, checkout và trang ghi
+// chú sản phẩm thì vẫn mở bình thường vì shop phụ cần chúng để
+// bán hàng (ghi chú sản phẩm là nội dung theo từng sản phẩm, nút
+// "Xem thêm" ở bảng shop phụ cũng mở nó).
+const MAIN_HOSTS = ['www.shoptimeless.io.vn', 'shoptimeless.io.vn'];
+function isMainHost(): boolean {
+  if (typeof window === 'undefined') return true;
+  const host = window.location.hostname;
+  return MAIN_HOSTS.includes(host) || host === 'localhost' || host === '127.0.0.1';
+}
+
+function BlockedMainPage() {
+  return (
+    <div className="text-center py-32">
+      <div className="text-6xl mb-6">🔒</div>
+      <h3 className="text-2xl font-cute font-bold text-gray-800 mb-2">Không mở được trang này trên domain này</h3>
+      <p className="text-gray-400 max-w-md mx-auto">
+        Domain này chỉ dùng cho các shop phụ. Bạn vui lòng mở đúng link shop phụ bạn nhận được,
+        hoặc đăng nhập để vào shop của mình.
+      </p>
+      <Link
+        to="/login"
+        className="mt-6 inline-block bg-primary text-white px-6 py-3 rounded-2xl font-bold shadow-md"
+      >
+        Đăng nhập
+      </Link>
+    </div>
+  );
 }
 
 // Lưới an toàn: trước đây 1 trang con crash (ví dụ shop phụ gặp
@@ -299,15 +337,23 @@ function App() {
               thẳng sang trang Quản lý, khỏi phải bấm Quản lý hay
               đăng xuất đăng nhập lại. Admin phụ thì về trang quản
               lý của shop mình. Khách và CTV vẫn vào trang chủ bình
-              thường (có nút Mua ngay) như cũ. */}
+              thường (có nút Mua ngay) như cũ.
+              Ngoại lệ trên domain lạ: web chính bị chặn nên link
+              gốc không mở trang chủ chính nữa — admin phụ thì vẫn
+              về trang quản lý của shop mình (đó là web phụ, không
+              phải web chính), còn lại hiện thông báo chặn. */}
           <Route
             path="/"
             element={
-              user && user.role === 'admin'
-                ? <Navigate to="/admin" replace />
-                : user && user.role === 'subadmin' && user.shop_slug
-                  ? <Navigate to={`/${user.shop_slug}/admin`} replace />
-                  : <Home user={user} />
+              !isMainHost()
+                ? (user && user.role === 'subadmin' && user.shop_slug
+                    ? <Navigate to={`/${user.shop_slug}/admin`} replace />
+                    : <BlockedMainPage />)
+                : user && user.role === 'admin'
+                  ? <Navigate to="/admin" replace />
+                  : user && user.role === 'subadmin' && user.shop_slug
+                    ? <Navigate to={`/${user.shop_slug}/admin`} replace />
+                    : <Home user={user} />
             }
           />
 
@@ -334,26 +380,36 @@ function App() {
             element={<Login onLogin={handleLogin} user={user} />}
           />
 
+          {/* Trang quản trị chính: trên domain lạ thì chặn hẳn
+              (hiện thông báo), kể cả khi đã đăng nhập admin chính
+              — vì web chính chỉ mở trên domain chính. */}
           <Route
             path="/admin"
             element={
-              user && user.role === 'admin'
-                ? <AdminDashboard user={user} />
-                : <Navigate to="/" />
+              !isMainHost()
+                ? <BlockedMainPage />
+                : user && user.role === 'admin'
+                  ? <AdminDashboard user={user} />
+                  : <Navigate to="/" />
             }
           />
 
           <Route
             path="/admin/product/:productId"
             element={
-              user && user.role === 'admin'
-                ? <ProductFormPage user={user} />
-                : <Navigate to="/" />
+              !isMainHost()
+                ? <BlockedMainPage />
+                : user && user.role === 'admin'
+                  ? <ProductFormPage user={user} />
+                  : <Navigate to="/" />
             }
           />
 
           <Route path="/checkout/:productId" element={<CheckoutPage user={user} onProductShopSlug={setCheckoutShopSlug} />} />
 
+          {/* Trang ghi chú sản phẩm KHÔNG chặn trên domain lạ: nó
+              là nội dung theo từng sản phẩm, bảng shop phụ cũng
+              dùng nó (nút "Xem thêm" ở cột ghi chú). */}
           <Route path="/product-notes/:productId" element={<ProductNotesPage />} />
 
           <Route path="*" element={<Navigate to="/" />} />
