@@ -503,17 +503,15 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
             </div>
           </div>
 
-          {/* Giá — shop phụ CHỈ thấy và sửa được Giá Public.
-              Giá CTV chung và Giá riêng ctvtime bị ẩn hoàn toàn
-              với admin phụ, nhưng giá trị cũ vẫn giữ nguyên trong
-              form (không bị xóa) nên lúc Lưu không làm mất giá CTV
-              của sản phẩm đã sao chép từ shop chính. Sản phẩm mới
-              của shop phụ không có giá CTV thì CTV vào xem sẽ thấy
-              giá Public (do bảng giá tự rơi về giá Public khi
-              thiếu giá CTV). Shop chính vẫn thấy đủ 3 ô như cũ. */}
+          {/* Giá — shop phụ thấy và sửa được Giá Public VÀ Giá CTV
+              chung (để đặt giá cho CTV của shop mình). Chỉ Giá
+              riêng ctvtime vẫn ẩn với admin phụ vì đó là giá riêng
+              của shop chính. Giá CTV của biến thể cũng vẫn ẩn với
+              admin phụ, giá trị cũ giữ nguyên trong form nên lúc
+              Lưu không làm mất. Shop chính vẫn thấy đủ 3 ô như cũ. */}
           <div className="bg-pink-50/50 rounded-3xl p-5 space-y-4">
             <h4 className="font-cute font-bold text-primary text-lg">💰 Giá mặc định</h4>
-            <div className={isSubShop ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-gray-700 font-bold mb-2 text-sm">Giá Public (VND)</label>
                 <input
@@ -525,19 +523,17 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
                   className="w-full px-4 py-3 rounded-2xl border-2 border-pink-100 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
                 />
               </div>
-              {!isSubShop && (
-                <div>
-                  <label className="block text-gray-700 font-bold mb-2 text-sm">Giá CTV chung (VND)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.price_ctv ?? ''}
-                    onFocus={(e) => e.target.select()}
-                    onChange={e => setForm(prev => ({ ...prev, price_ctv: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                    className="w-full px-4 py-3 rounded-2xl border-2 border-pink-100 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
-                  />
-                </div>
-              )}
+              <div>
+                <label className="block text-gray-700 font-bold mb-2 text-sm">Giá CTV chung (VND)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.price_ctv ?? ''}
+                  onFocus={(e) => e.target.select()}
+                  onChange={e => setForm(prev => ({ ...prev, price_ctv: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-pink-100 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
+                />
+              </div>
             </div>
             {/* Giá riêng ctvtime — chỉ shop chính */}
             {!isSubShop && (
