@@ -151,8 +151,12 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
     try {
       const querySnapshot = await getDocs(collection(db, 'users'));
       const allUsers = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      // CTV cách ly theo shop: shop chính chỉ thấy CTV không gắn
+      // mã shop, shop phụ chỉ thấy CTV do chính shop đó tạo
+      // (shop_slug = mã shop mình). Nhờ vậy CTV của admin phụ
+      // không bao giờ hiện ở trang admin chính hay shop phụ khác.
       const ctvList = allUsers
-        .filter((u: any) => u.role === 'ctv')
+        .filter((u: any) => u.role === 'ctv' && (isSubShop ? u.shop_slug === shopSlug : !u.shop_slug))
         .sort((a: any, b: any) => {
           const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
           const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
@@ -539,12 +543,23 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
+        if (isSubShop) {
+          // Shop phụ KHÔNG được đổi role của tài khoản đã tồn tại:
+          // username đăng nhập là toàn cục, đổi role ở đây có thể
+          // vô tình cướp quyền của tài khoản chính hoặc shop khác.
+          alert('Username này đã tồn tại, bạn chọn username khác nhé.');
+          return;
+        }
         const userDoc = querySnapshot.docs[0];
         await updateDoc(doc(db, 'users', userDoc.id), { role: 'ctv' });
       } else {
-        await addDoc(collection(db, 'users'), { 
-          username: cleanName, 
+        await addDoc(collection(db, 'users'), {
+          username: cleanName,
           role: 'ctv',
+          // CTV của shop phụ: gắn mã shop + người tạo để chỉ hiện
+          // trong tab CTV của shop phụ đó, không hiện ở trang
+          // chính hay shop phụ khác. CTV chính không gắn mã shop.
+          ...(isSubShop && shopSlug ? { shop_slug: shopSlug, created_by: user.username } : {}),
           created_at: new Date().toISOString()
         });
       }
@@ -559,7 +574,14 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
   const handleRemoveCtv = async (id: string) => {
     if (!window.confirm('Gỡ quyền CTV của người này?')) return;
     try {
-      await updateDoc(doc(db, 'users', id), { role: 'user' });
+      if (isSubShop) {
+        // Gỡ luôn mã shop + người tạo để tài khoản này không còn
+        // dính tới shop phụ nữa (tránh sau này bị liệt nhầm vào
+        // danh sách CTV của shop này khi được cấp quyền lại).
+        await updateDoc(doc(db, 'users', id), { role: 'user', shop_slug: null, created_by: null });
+      } else {
+        await updateDoc(doc(db, 'users', id), { role: 'user' });
+      }
       fetchCtvs();
     } catch (err) {
       alert('Lỗi khi gỡ quyền CTV!');
@@ -788,29 +810,28 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
               📦 Sản phẩm
             </button>
             {/* Shop phụ cũng có tab Cài đặt riêng (phương thức
-                thanh toán + danh mục của shop mình), nhưng không
-                có tab CTV và tab Admin phụ. */}
+                thanh toán + danh mục của shop mình) và tab CTV
+                riêng (chỉ CTV của shop mình), nhưng không có tab
+                Admin phụ. */}
             <button
               onClick={() => setActiveTab('settings')}
               className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'settings' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
             >
               ⚙️ Cài đặt
             </button>
+            <button
+              onClick={() => setActiveTab('ctvs')}
+              className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'ctvs' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
+            >
+              👥 CTV
+            </button>
             {!isSubShop && (
-              <>
-                <button
-                  onClick={() => setActiveTab('ctvs')}
-                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'ctvs' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
-                >
-                  👥 CTV
-                </button>
-                <button
-                  onClick={() => setActiveTab('subadmins')}
-                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'subadmins' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
-                >
-                  🏪 Admin phụ
-                </button>
-              </>
+              <button
+                onClick={() => setActiveTab('subadmins')}
+                className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'subadmins' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-pink-50'}`}
+              >
+                🏪 Admin phụ
+              </button>
             )}
           </div>
         </div>
@@ -1150,17 +1171,33 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
               </button>
             </div>
 
-            {/* Ghi chú về giá riêng cho ctvtime */}
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-start gap-3">
-              <span className="text-amber-500 text-lg mt-0.5">💡</span>
-              <div>
-                <p className="text-sm font-bold text-amber-700">Giá đặc biệt cho CTV <span className="font-black text-amber-800">ctvtime</span></p>
-                <p className="text-xs text-amber-600 mt-0.5">
-                  CTV có username <strong>ctvtime</strong> sẽ thấy <strong>giá riêng (price_ctvtime)</strong> khi được thiết lập trong từng sản phẩm. Các CTV còn lại thấy giá CTV chung (price_ctv).
-                  Để thiết lập giá riêng, vào <strong>Sản phẩm → Sửa sản phẩm</strong>.
-                </p>
+            {/* Ghi chú về giá riêng cho ctvtime — chỉ shop chính.
+                Shop phụ không có giá riêng ctvtime: CTV của shop
+                phụ chỉ thấy giá CTV chung của shop mình. */}
+            {!isSubShop && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-start gap-3">
+                <span className="text-amber-500 text-lg mt-0.5">💡</span>
+                <div>
+                  <p className="text-sm font-bold text-amber-700">Giá đặc biệt cho CTV <span className="font-black text-amber-800">ctvtime</span></p>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    CTV có username <strong>ctvtime</strong> sẽ thấy <strong>giá riêng (price_ctvtime)</strong> khi được thiết lập trong từng sản phẩm. Các CTV còn lại thấy giá CTV chung (price_ctv).
+                    Để thiết lập giá riêng, vào <strong>Sản phẩm → Sửa sản phẩm</strong>.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
+            {isSubShop && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-start gap-3">
+                <span className="text-amber-500 text-lg mt-0.5">💡</span>
+                <div>
+                  <p className="text-sm font-bold text-amber-700">CTV của shop phụ chỉ thấy giá CTV chung của shop này</p>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    Giá riêng <strong>ctvtime</strong> là của shop chính, không áp dụng cho CTV shop phụ.
+                    Để đặt giá CTV chung cho shop mình, vào <strong>Sản phẩm → Sửa sản phẩm</strong> (ô Giá CTV chung).
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="bg-white/90 backdrop-blur-sm rounded-3xl border border-slate-200 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.28)] overflow-hidden">
               <table className="w-full text-left">
