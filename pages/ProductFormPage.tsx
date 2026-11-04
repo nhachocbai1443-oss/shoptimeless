@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { collection, doc, getDoc, addDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { uploadImageToSupabase } from '../supabase';
 import { Product, User, Category } from '../types';
-import { fanOutNewMainProduct, getShopSettings } from '../utils/shop';
+import { fanOutNewMainProduct, getShopSettings, propagateCtvPriceToSubShops } from '../utils/shop';
 
 interface Props {
   user: User;
@@ -51,6 +51,7 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
     price_public: 0,
     price_ctv: 0,
     price_ctvtime: undefined,
+    price_ctv_sub: 0,
     discount_percent: 0,
     sort_order: 0,
     is_hot: false,
@@ -258,6 +259,12 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
         if (v.price_ctvtime !== undefined && v.price_ctvtime !== null && v.price_ctvtime !== '' && Number(v.price_ctvtime) > 0) {
           cleaned.price_ctvtime = Number(v.price_ctvtime);
         }
+        // Giữ lại giá CTV phụ của biến thể nếu đã có, để lần
+        // Lưu sau không làm mất (dù form hiện chưa cho sửa riêng
+        // từng biến thể cho phụ).
+        if (v.price_ctv_sub !== undefined && v.price_ctv_sub !== null && v.price_ctv_sub !== '' && Number(v.price_ctv_sub) > 0) {
+          cleaned.price_ctv_sub = Number(v.price_ctv_sub);
+        }
         return cleaned;
       });
       productData.price_public = Number(productData.price_public) || 0;
@@ -284,17 +291,36 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
       } else {
         delete productData.shop_slug;
       }
+      // Tách 2 luồng giá CTV để không ghi đè nhau: form shop phụ
+      // chỉ ghi giá CTV phụ của mình (price_ctv_sub), KHÔNG ghi
+      // đè giá CTV chung/ctvtime của chính (xóa khỏi dữ liệu lưu
+      // thì Firestore giữ nguyên giá trị cũ); form chính thì
+      // ngược lại, không ghi đè giá CTV phụ.
+      if (isSubShop) {
+        productData.price_ctv_sub = Number(productData.price_ctv_sub) || 0;
+        delete productData.price_ctv;
+        delete productData.price_ctvtime;
+      } else {
+        delete productData.price_ctv_sub;
+      }
 
       if (isEdit) {
         await updateDoc(doc(db, 'products', productId!), productData);
-        // LUẬT 04/11: giá CTV của shop phụ ĐỘC LẬP HOÀN TOÀN với
-        // shop chính, không liên quan gì tới admin chính. Admin
-        // chính sửa giá CTV (chung hay ctvtime) cũng KHÔNG truyền
-        // sang các bản sao ở shop phụ nữa — giá CTV ở shop phụ
-        // chỉ thay đổi khi admin phụ tự sửa nó. (Luật cũ 19:21
-        // "giá CTV shop phụ luôn theo chính" đã bị luật này thay
-        // thế. Hàm propagateCtvPriceToSubShops trong utils/shop.ts
-        // vì vậy không còn được gọi ở đâu nữa.)
+        // Truyền giá CTV sang shop phụ — CHỈ LUỒNG CỦA CHÍNH:
+        // để CTV của chính vào shop phụ vẫn thấy giá chính mới
+        // nhất khi chính sửa giá. Giá CTV phụ (price_ctv_sub)
+        // không bao giờ bị động tới vì hàm propagate chỉ ghi
+        // đúng các field luồng chính.
+        if (!isSubShop) {
+          await propagateCtvPriceToSubShops({
+            id: productId!,
+            name: originalProduct?.name ?? productData.name,
+            category: originalProduct?.category ?? productData.category,
+            price_ctv: productData.price_ctv,
+            price_ctvtime: productData.price_ctvtime,
+            variants: productData.variants,
+          });
+        }
         alert('Đã cập nhật sản phẩm thành công!');
       } else {
         const newRef = await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
@@ -327,6 +353,9 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
               if (v.price_ctvtime !== undefined && v.price_ctvtime !== null && v.price_ctvtime !== '' && Number(v.price_ctvtime) > 0) {
                 cleaned.price_ctvtime = Number(v.price_ctvtime);
               }
+              if (v.price_ctv_sub !== undefined && v.price_ctv_sub !== null && v.price_ctv_sub !== '' && Number(v.price_ctv_sub) > 0) {
+                cleaned.price_ctv_sub = Number(v.price_ctv_sub);
+              }
               return cleaned;
             });
             productData.price_public = Number(productData.price_public) || 0;
@@ -350,12 +379,30 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
             } else {
               delete productData.shop_slug;
             }
+            // Tách 2 luồng giá CTV như nhánh trên (phụ chỉ ghi
+            // price_ctv_sub, chính không ghi đè price_ctv_sub).
+            if (isSubShop) {
+              productData.price_ctv_sub = Number(productData.price_ctv_sub) || 0;
+              delete productData.price_ctv;
+              delete productData.price_ctvtime;
+            } else {
+              delete productData.price_ctv_sub;
+            }
 
             if (isEdit) {
               await updateDoc(doc(db, 'products', productId!), productData);
-              // Không truyền giá CTV sang shop phụ nữa (luật 04/11:
-              // giá CTV shop phụ độc lập hoàn toàn với chính).
-              // Nhánh lưu lại này dùng chung luật với nhánh trên.
+              // Truyền giá CTV sang shop phụ — chỉ luồng của
+              // chính, không động tới giá CTV phụ (như nhánh trên).
+              if (!isSubShop) {
+                await propagateCtvPriceToSubShops({
+                  id: productId!,
+                  name: originalProduct?.name ?? productData.name,
+                  category: originalProduct?.category ?? productData.category,
+                  price_ctv: productData.price_ctv,
+                  price_ctvtime: productData.price_ctvtime,
+                  variants: productData.variants,
+                });
+              }
               alert('Đã cập nhật sản phẩm thành công!');
             } else {
               const newRef = await addDoc(collection(db, 'products'), { ...productData, created_at: new Date().toISOString() });
@@ -490,12 +537,15 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
             </div>
           </div>
 
-          {/* Giá — shop phụ thấy và sửa được Giá Public VÀ Giá CTV
-              chung (để đặt giá cho CTV của shop mình). Chỉ Giá
-              riêng ctvtime vẫn ẩn với admin phụ vì đó là giá riêng
-              của shop chính. Giá CTV của biến thể cũng vẫn ẩn với
-              admin phụ, giá trị cũ giữ nguyên trong form nên lúc
-              Lưu không làm mất. Shop chính vẫn thấy đủ 3 ô như cũ. */}
+          {/* Giá — 2 luồng CTV tách riêng: shop chính sửa ô Giá
+              CTV chung này thì ghi vào price_ctv (luồng của chính,
+              CTV chính thấy ở cả 2 shop); shop phụ sửa cùng 1 ô
+              này thì ghi vào price_ctv_sub (luồng của phụ, chỉ
+              CTV của shop phụ đó thấy, chính không bao giờ ghi
+              đè). Chỉ Giá riêng ctvtime vẫn ẩn với admin phụ vì
+              đó là giá riêng của shop chính. Giá CTV của biến thể
+              cũng vẫn ẩn với admin phụ, giá trị cũ giữ nguyên
+              trong form nên lúc Lưu không làm mất. */}
           <div className="bg-pink-50/50 rounded-3xl p-5 space-y-4">
             <h4 className="font-cute font-bold text-primary text-lg">💰 Giá mặc định</h4>
             <div className="grid grid-cols-2 gap-4">
@@ -515,9 +565,11 @@ const ProductFormPage: React.FC<Props> = ({ user, shopSlug }) => {
                 <input
                   type="number"
                   min="0"
-                  value={form.price_ctv ?? ''}
+                  value={isSubShop ? (form.price_ctv_sub ?? '') : (form.price_ctv ?? '')}
                   onFocus={(e) => e.target.select()}
-                  onChange={e => setForm(prev => ({ ...prev, price_ctv: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                  onChange={e => setForm(prev => isSubShop
+                    ? { ...prev, price_ctv_sub: e.target.value === '' ? 0 : Number(e.target.value) }
+                    : { ...prev, price_ctv: e.target.value === '' ? 0 : Number(e.target.value) })}
                   className="w-full px-4 py-3 rounded-2xl border-2 border-pink-100 focus:border-primary focus:outline-none focus:ring-4 focus:ring-pink-100 transition-all font-medium"
                 />
               </div>
