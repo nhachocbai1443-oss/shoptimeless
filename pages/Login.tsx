@@ -40,6 +40,13 @@ const Login: React.FC<Props> = ({ onLogin, user }) => {
       // mình, không vào trang admin chính.
       return `/${u.shop_slug}/admin`;
     }
+    if (u.role === 'ctv' && u.shop_slug) {
+      // CTV của shop phụ đăng nhập ở đâu cũng về link shop của
+      // mình để xem giá CTV của shop đó, không về trang chủ chính
+      // và không vào trang quản lý. CTV chính (không gắn mã shop)
+      // thì rơi xuống nhánh returnShop bên dưới như cũ.
+      return `/${u.shop_slug}`;
+    }
     if (validReturnShop) {
       // CTV và khách đăng nhập từ shop phụ thì về lại link shop
       // đó (ví dụ /#/abc) để mua hàng với giá của shop đó, không
