@@ -37,6 +37,16 @@ const CheckoutPage: React.FC<Props> = ({ user, onProductShopSlug }) => {
   });
 
   const isCTV = user?.role === 'ctv';
+  // CTV của shop phụ (có mã shop): lúc thanh toán cũng chỉ trả
+  // giá CTV riêng của shop phụ, không trả giá CTV chung của
+  // chính — khớp với giá hiển thị ở bảng sản phẩm. Giá CTV phụ
+  // của biến thể (nếu có) ưu tiên trước, chưa có thì dùng giá
+  // CTV phụ chung của sản phẩm, cuối cùng mới về giá Public.
+  const isSubCtv = isCTV && !!user?.shop_slug;
+  const subCtvPrice = (pub: number, sub?: number) => {
+    const s = Number(sub) || 0;
+    return s > 0 ? s : Number(pub) || 0;
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -119,9 +129,9 @@ const CheckoutPage: React.FC<Props> = ({ user, onProductShopSlug }) => {
   }
 
   const currentForm = selectedVariant ? selectedVariant.form : product.form;
-  const unitPrice = selectedVariant 
-    ? (isCTV ? selectedVariant.price_ctv : selectedVariant.price_public)
-    : (isCTV ? product.price_ctv : product.price_public);
+  const unitPrice = selectedVariant
+    ? (isSubCtv ? subCtvPrice(selectedVariant.price_public, selectedVariant.price_ctv_sub ?? product.price_ctv_sub) : (isCTV ? selectedVariant.price_ctv : selectedVariant.price_public))
+    : (isSubCtv ? subCtvPrice(product.price_public, product.price_ctv_sub) : (isCTV ? product.price_ctv : product.price_public));
   
   const totalPrice = unitPrice * quantity;
   const isUpgrade = currentForm.toLowerCase().includes('chính chủ');
@@ -322,7 +332,7 @@ const CheckoutPage: React.FC<Props> = ({ user, onProductShopSlug }) => {
                         className={`p-4 rounded-2xl border-2 text-left transition-all ${!selectedVariant ? 'border-primary bg-pink-50/30' : 'border-gray-50 hover:border-pink-100'}`}
                       >
                         <div className="text-sm font-bold text-gray-800">{product.form}</div>
-                        <div className="text-xs text-primary font-bold">{(isCTV ? product.price_ctv : product.price_public).toLocaleString('vi-VN')}đ</div>
+                        <div className="text-xs text-primary font-bold">{(isSubCtv ? subCtvPrice(product.price_public, product.price_ctv_sub) : (isCTV ? product.price_ctv : product.price_public)).toLocaleString('vi-VN')}đ</div>
                       </button>
                       {/* Variants */}
                       {product.variants?.map((v, idx) => (
@@ -333,7 +343,7 @@ const CheckoutPage: React.FC<Props> = ({ user, onProductShopSlug }) => {
                           className={`p-4 rounded-2xl border-2 text-left transition-all ${selectedVariant === v ? 'border-primary bg-pink-50/30' : 'border-gray-50 hover:border-pink-100'}`}
                         >
                           <div className="text-sm font-bold text-gray-800">{v.form}</div>
-                          <div className="text-xs text-primary font-bold">{(isCTV ? v.price_ctv : v.price_public).toLocaleString('vi-VN')}đ</div>
+                          <div className="text-xs text-primary font-bold">{(isSubCtv ? subCtvPrice(v.price_public, v.price_ctv_sub ?? product.price_ctv_sub) : (isCTV ? v.price_ctv : v.price_public)).toLocaleString('vi-VN')}đ</div>
                         </button>
                       ))}
                     </div>
