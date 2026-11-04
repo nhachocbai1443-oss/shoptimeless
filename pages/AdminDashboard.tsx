@@ -117,11 +117,15 @@ const AdminDashboard: React.FC<Props> = ({ user, shopSlug }) => {
   const fetchProducts = async () => {
     setLoadingProducts(true);
     try {
-      const q = query(
-        collection(db, 'products'),
-        orderBy('sort_order', 'asc')
-      );
-      const querySnapshot = await getDocs(q);
+      // Lấy toàn bộ sản phẩm KHÔNG sắp xếp ở query: query có
+      // orderBy('sort_order') sẽ bỏ qua luôn những bản ghi không
+      // có field sort_order (bản ghi cũ, chưa từng qua lần lưu
+      // nào sau khi có tính năng kéo-thả), nên trang quản trị
+      // thiếu mất chúng trong khi trang shop (lấy không orderBy)
+      // vẫn thấy đủ — lệch đúng 3 sản phẩm ở shop timelesslien.
+      // Thứ tự vẫn đúng vì ngay dưới đây đã sắp xếp ở client
+      // (HOT trước, rồi sort_order, thiếu thì tính là 0).
+      const querySnapshot = await getDocs(collection(db, 'products'));
       const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
       const sorted = data.sort((a: any, b: any) => {
         if (b.is_hot === a.is_hot) return (a.sort_order || 0) - (b.sort_order || 0);
